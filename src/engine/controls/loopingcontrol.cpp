@@ -338,6 +338,9 @@ void LoopingControl::slotLoopScale(double scaleFactor) {
             ? LoopSeekMode::Changed
             : LoopSeekMode::MovedOut;
 
+    qWarning() << "DIAG m_loopInfo publish [slotLoopScale]"
+               << loopInfo.startPosition << "-" << loopInfo.endPosition
+               << "seekMode" << static_cast<int>(loopInfo.seekMode);
     m_loopInfo.setValue(loopInfo);
     emit loopUpdated(loopInfo.startPosition, loopInfo.endPosition);
 
@@ -392,10 +395,34 @@ void LoopingControl::process(const double rate,
                                     loopInfo.endPosition);
                     if (targetPosition.isValid()) {
                         // jump immediately
+                        qWarning() << "DIAG process() seekAbs to"
+                                   << targetPosition;
                         seekAbs(targetPosition);
+                    } else {
+                        qWarning() << "DIAG process() adjustedPosition"
+                                   << "returned invalid, playhead"
+                                   << currentPosition;
                     }
+                } else {
+                    qWarning() << "DIAG process() seekMode is"
+                               << static_cast<int>(loopInfo.seekMode)
+                               << "(not Changed), skipping seek";
                 }
+                qWarning() << "DIAG process() m_oldLoopInfo update:"
+                           << m_oldLoopInfo.startPosition << "-"
+                           << m_oldLoopInfo.endPosition
+                           << "→" << loopInfo.startPosition << "-"
+                           << loopInfo.endPosition
+                           << "playhead" << currentPosition;
                 m_oldLoopInfo = loopInfo;
+            } else if (currentPosition >= loopInfo.endPosition ||
+                    currentPosition < loopInfo.startPosition) {
+                qWarning() << "DIAG process() NO change detected but playhead"
+                           << currentPosition << "outside loop"
+                           << loopInfo.startPosition << "-"
+                           << loopInfo.endPosition
+                           << "oldLoop" << m_oldLoopInfo.startPosition
+                           << "-" << m_oldLoopInfo.endPosition;
             }
         }
     }
@@ -441,6 +468,18 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
             *pTargetPosition = loopInfo.startPosition;
             return currentPosition;
         }
+        // DIAG: quantize-ON transition skip — verify playhead is inside the new loop
+        if (!reverse && !m_bAdjustingLoopOut &&
+                quantizeEnabledAndHasTrueTrackBeats()) {
+            if (currentPosition >= loopInfo.endPosition ||
+                    currentPosition < loopInfo.startPosition) {
+                qWarning() << "DIAG: loop-out release (quantize ON):"
+                           << "playhead" << currentPosition
+                           << "is outside loop"
+                           << loopInfo.startPosition << "-"
+                           << loopInfo.endPosition;
+            }
+        }
     }
 
     if (m_bLoopingEnabled &&
@@ -460,6 +499,17 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                             m_oldLoopInfo.endPosition,
                             loopInfo.startPosition,
                             loopInfo.endPosition);
+                    // DIAG: if playhead is outside the new loop,
+                    // adjustedPosition must return a valid target
+                    if (!reverse &&
+                            currentPosition >= loopInfo.endPosition &&
+                            !pTargetPosition->isValid()) {
+                        qWarning() << "DIAG: adjustedPosition returned invalid"
+                                   << "but playhead" << currentPosition
+                                   << "is past loop end" << loopInfo.endPosition
+                                   << "oldLoop" << m_oldLoopInfo.startPosition
+                                   << "-" << m_oldLoopInfo.endPosition;
+                    }
                     break;
                 case LoopSeekMode::MovedOut: {
                     bool movedOut = false;
@@ -489,16 +539,42 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                     // position.
                     break;
                 }
+                qWarning() << "DIAG nextTrigger() m_oldLoopInfo update:"
+                           << m_oldLoopInfo.startPosition << "-"
+                           << m_oldLoopInfo.endPosition
+                           << "→" << loopInfo.startPosition << "-"
+                           << loopInfo.endPosition
+                           << "playhead" << currentPosition
+                           << "target" << *pTargetPosition;
                 m_oldLoopInfo = loopInfo;
                 if (pTargetPosition->isValid()) {
                     // jump immediately
                     return currentPosition;
                 }
+            } else if (!reverse &&
+                    (currentPosition >= loopInfo.endPosition ||
+                            currentPosition < loopInfo.startPosition)) {
+                qWarning() << "DIAG nextTrigger() NO change but playhead"
+                           << currentPosition << "outside loop"
+                           << loopInfo.startPosition << "-"
+                           << loopInfo.endPosition
+                           << "oldLoop" << m_oldLoopInfo.startPosition
+                           << "-" << m_oldLoopInfo.endPosition;
             }
             if (reverse) {
                 *pTargetPosition = loopInfo.endPosition;
                 return loopInfo.startPosition;
             } else {
+                // DIAG: normal loop trigger — must be ahead of playhead
+                if (loopInfo.endPosition <= currentPosition) {
+                    qWarning() << "DIAG: loop trigger behind playhead!"
+                               << "trigger" << loopInfo.endPosition
+                               << "playhead" << currentPosition
+                               << "loop" << loopInfo.startPosition
+                               << "-" << loopInfo.endPosition
+                               << "oldLoop" << m_oldLoopInfo.startPosition
+                               << "-" << m_oldLoopInfo.endPosition;
+                }
                 *pTargetPosition = loopInfo.startPosition;
                 return loopInfo.endPosition;
             }
@@ -685,6 +761,9 @@ void LoopingControl::setLoop(mixxx::audio::FramePos startPosition,
         loopInfo.endPosition = endPosition;
         loopInfo.seekMode = LoopSeekMode::None;
         clearActiveBeatLoop();
+        qWarning() << "DIAG m_loopInfo publish [setLoop]"
+                   << loopInfo.startPosition << "-" << loopInfo.endPosition
+                   << "seekMode" << static_cast<int>(loopInfo.seekMode);
         m_loopInfo.setValue(loopInfo);
         m_pCOLoopStartPosition->set(loopInfo.startPosition.toEngineSamplePos());
         m_pCOLoopEndPosition->set(loopInfo.endPosition.toEngineSamplePos());
@@ -794,6 +873,9 @@ void LoopingControl::setLoopInToCurrentPosition() {
         clearActiveBeatLoop();
     }
 
+    qWarning() << "DIAG m_loopInfo publish [setLoopIn]"
+               << loopInfo.startPosition << "-" << loopInfo.endPosition
+               << "seekMode" << static_cast<int>(loopInfo.seekMode);
     m_loopInfo.setValue(loopInfo);
     //qDebug() << "set loop_in to " << loopInfo.startPosition;
 }
@@ -821,6 +903,9 @@ void LoopingControl::slotLoopRemove() {
 
 void LoopingControl::clearLoopInfoAndControls() {
     LoopInfo loopInfo;
+    qWarning() << "DIAG m_loopInfo publish [clearLoopInfo]"
+               << loopInfo.startPosition << "-" << loopInfo.endPosition
+               << "seekMode" << static_cast<int>(loopInfo.seekMode);
     m_loopInfo.setValue(loopInfo);
     m_oldLoopInfo = loopInfo;
     m_pCOLoopStartPosition->set(loopInfo.startPosition.toEngineSamplePosMaybeInvalid());
@@ -913,7 +998,29 @@ void LoopingControl::setLoopOutToCurrentPosition() {
             // will return a position inside the new/old loop.
             if (position > quantizedBeatPosition &&
                     quantizedBeatPosition == m_oldLoopInfo.endPosition) {
+                qWarning() << "DIAG: m_oldLoopInfo workaround fired:"
+                           << "quantized end" << quantizedBeatPosition
+                           << "matches old end" << m_oldLoopInfo.endPosition
+                           << "playhead" << position
+                           << "adjusting" << m_bAdjustingLoopOut
+                           << "loopEnabled" << m_bLoopingEnabled
+                           << "thread" << QThread::currentThread();
                 m_oldLoopInfo.endPosition = mixxx::audio::kInvalidFramePos;
+            }
+            // DIAG: the workaround above requires position > quantizedBeatPosition.
+            // If playhead is exactly on the beat (position == quantizedBeatPosition),
+            // it won't fire. The audio thread's actual position may have advanced
+            // past this point, so log when the change detection might fail.
+            if (position >= quantizedBeatPosition &&
+                    loopInfo.startPosition == m_oldLoopInfo.startPosition &&
+                    quantizedBeatPosition == m_oldLoopInfo.endPosition &&
+                    m_oldLoopInfo.endPosition.isValid()) {
+                qWarning() << "DIAG: new loop end" << quantizedBeatPosition
+                           << "matches m_oldLoopInfo"
+                           << m_oldLoopInfo.startPosition << "-"
+                           << m_oldLoopInfo.endPosition
+                           << "playhead" << position
+                           << "— change detection may fail in nextTrigger";
             }
             position = quantizedBeatPosition;
         }
@@ -963,6 +1070,9 @@ void LoopingControl::setLoopOutToCurrentPosition() {
     }
     //qDebug() << "set loop_out to " << loopInfo.endPosition;
 
+    qWarning() << "DIAG m_loopInfo publish [setLoopOut]"
+               << loopInfo.startPosition << "-" << loopInfo.endPosition
+               << "seekMode" << static_cast<int>(loopInfo.seekMode);
     m_loopInfo.setValue(loopInfo);
 }
 
@@ -974,6 +1084,14 @@ void LoopingControl::slotLoopOut(double pressed) {
     if (m_pTrack == nullptr) {
         return;
     }
+
+    qWarning() << "----------------";
+    qWarning() << "DIAG slotLoopOut:" << pressed
+               << "loopEnabled" << m_bLoopingEnabled
+               << "adjusting" << m_bAdjustingLoopOut
+               << "pressedWhileDisabled" << m_bLoopOutPressedWhileLoopDisabled
+               << "oldLoop" << m_oldLoopInfo.startPosition
+               << "-" << m_oldLoopInfo.endPosition;
 
     // If loop is enabled, suspend looping and set the loop out point
     // when this button is released.
@@ -1149,6 +1267,9 @@ void LoopingControl::slotLoopStartPos(double positionSamples) {
     }
 
     m_pCOLoopStartPosition->set(loopInfo.startPosition.toEngineSamplePosMaybeInvalid());
+    qWarning() << "DIAG m_loopInfo publish [slotLoopStartPos]"
+               << loopInfo.startPosition << "-" << loopInfo.endPosition
+               << "seekMode" << static_cast<int>(loopInfo.seekMode);
     m_loopInfo.setValue(loopInfo);
 }
 
@@ -1179,6 +1300,11 @@ void LoopingControl::slotLoopEndPos(double positionSamples) {
     loopInfo.endPosition = position;
     loopInfo.seekMode = LoopSeekMode::MovedOut;
     m_pCOLoopEndPosition->set(position.toEngineSamplePosMaybeInvalid());
+    if (loopInfo.startPosition.isValid() && loopInfo.endPosition.isValid()) {
+        qWarning() << "DIAG slotLoopEndPos publishing MovedOut with valid loop"
+                   << loopInfo.startPosition << "-" << loopInfo.endPosition
+                   << "thread" << QThread::currentThread();
+    }
     m_loopInfo.setValue(loopInfo);
 }
 
@@ -1668,6 +1794,9 @@ void LoopingControl::slotBeatLoop(double beats,
         break;
     }
 
+    qWarning() << "DIAG m_loopInfo publish [slotBeatLoop]"
+               << newloopInfo.startPosition << "-" << newloopInfo.endPosition
+               << "seekMode" << static_cast<int>(newloopInfo.seekMode);
     m_loopInfo.setValue(newloopInfo);
     emit loopUpdated(newloopInfo.startPosition, newloopInfo.endPosition);
     m_pCOLoopStartPosition->set(newloopInfo.startPosition.toEngineSamplePos());
@@ -1831,6 +1960,9 @@ void LoopingControl::slotLoopMove(double beats) {
 
         loopInfo.startPosition = newLoopStartPosition;
         loopInfo.endPosition = newLoopEndPosition;
+        qWarning() << "DIAG m_loopInfo publish [slotLoopMove]"
+                   << loopInfo.startPosition << "-" << loopInfo.endPosition
+                   << "seekMode" << static_cast<int>(loopInfo.seekMode);
         m_loopInfo.setValue(loopInfo);
         emit loopUpdated(loopInfo.startPosition, loopInfo.endPosition);
         m_pCOLoopStartPosition->set(loopInfo.startPosition.toEngineSamplePosMaybeInvalid());
