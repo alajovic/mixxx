@@ -1593,17 +1593,12 @@ void LoopingControl::slotBeatLoop(double beats,
         m_currentPosition.setValue(seekPosition);
     }
 
-    double maxBeatSize = kBeatSizes.back();
-    double minBeatSize = kBeatSizes.front();
     if (beats < 0) {
         // For now we do not handle negative beatloops.
         clearActiveBeatLoop();
         return;
-    } else if (beats > maxBeatSize) {
-        beats = maxBeatSize;
-    } else if (beats < minBeatSize) {
-        beats = minBeatSize;
     }
+    beats = std::clamp(beats, kBeatSizes.front(), kBeatSizes.back());
 
     FrameInfo info = frameInfo();
     const auto trackEndPosition = info.trackEndPosition;
