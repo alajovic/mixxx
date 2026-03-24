@@ -90,25 +90,25 @@ class LoopingControl : public EngineControl {
             mixxx::audio::FramePos endPosition,
             bool enabled);
 
-    LoopInfo getLoopInfo() {
+    LoopInfo getLoopInfo() const {
         return m_loopInfo.getValue();
     }
 
     void setRateControl(RateControl* rateControl);
 
-    bool isLoopingEnabled() {
+    bool isLoopingEnabled() const {
         return m_bLoopingEnabled;
     }
-    bool isAdjustLoopInActive() {
+    bool isAdjustLoopInActive() const {
         return m_loopAdjustTarget == LoopAdjustTarget::LoopIn;
     }
-    bool isAdjustLoopOutActive() {
+    bool isAdjustLoopOutActive() const {
         return m_loopAdjustTarget == LoopAdjustTarget::LoopOut;
     }
-    bool isLoopRollActive() {
+    bool isLoopRollActive() const {
         return m_bLoopRollActive;
     }
-    bool loopWasEnabledBeforeSlipEnable() {
+    bool loopWasEnabledBeforeSlipEnable() const {
         return m_bLoopWasEnabledBeforeSlipEnable;
     }
 
@@ -187,7 +187,7 @@ class LoopingControl : public EngineControl {
 
     // Fake beats that allow using looping/beatjump controls with no beats:
     // one 'beat' = one second
-    mixxx::BeatsPointer getFake60BpmBeats() {
+    mixxx::BeatsPointer getFake60BpmBeats() const {
         auto fakeBeats = mixxx::Beats::fromConstTempo(
                 frameInfo().sampleRate,
                 mixxx::audio::kStartFramePos,
