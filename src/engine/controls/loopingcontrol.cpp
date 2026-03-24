@@ -45,6 +45,128 @@ bool nearlySameLoop(LoopInfo const& first, LoopInfo const& second) {
             positionNear(first.endPosition, second.endPosition);
 }
 
+mixxx::audio::FramePos findQuantizedBeatloopStart(
+        const mixxx::BeatsPointer& pBeats,
+        mixxx::audio::FramePos currentPosition,
+        double beats) {
+    // The closest beat might be ahead of play position and will cause a catching loop.
+    mixxx::audio::FramePos prevBeatPosition;
+    mixxx::audio::FramePos nextBeatPosition;
+    if (!pBeats->findPrevNextBeats(currentPosition, &prevBeatPosition, &nextBeatPosition, false)) {
+        return currentPosition;
+    }
+
+    const mixxx::audio::FrameDiff_t beatLength = nextBeatPosition - prevBeatPosition;
+    double loopLength = beatLength * beats;
+    if (beats >= 1.0) {
+        const mixxx::audio::FramePos closestBeatPosition =
+                (nextBeatPosition - currentPosition >
+                        currentPosition - prevBeatPosition)
+                ? prevBeatPosition
+                : nextBeatPosition;
+        return closestBeatPosition;
+    }
+
+    // In case of beat length less then 1 beat:
+    // (| - beats, ^ - current track's position):
+    //
+    // ...|...................^........|...
+    //
+    // If we press 1/2 beatloop we want loop from 50% to 100%,
+    // If I press 1/4 beatloop, we want loop from 50% to 75% etc
+    const mixxx::audio::FrameDiff_t framesSinceLastBeat =
+            currentPosition - prevBeatPosition;
+    // find the previous beat fraction and check if the current position is
+    // closer to this or the next one place the new loop start to the closer one
+    const mixxx::audio::FramePos previousFractionBeatPosition =
+            prevBeatPosition + floor(framesSinceLastBeat / loopLength) * loopLength;
+    double framesSinceLastFractionBeatPosition = currentPosition - previousFractionBeatPosition;
+    if (framesSinceLastFractionBeatPosition <= (loopLength / 2.0)) {
+        return previousFractionBeatPosition;
+    }
+    return previousFractionBeatPosition + loopLength;
+}
+
+mixxx::audio::FramePos adjustedPositionInsideAdjustedLoop(
+        mixxx::audio::FramePos currentPosition,
+        bool reverse,
+        LoopInfo const& oldLoop,
+        LoopInfo const& newLoop) {
+    if (reverse) {
+        if (currentPosition <= newLoop.endPosition && currentPosition > newLoop.startPosition) {
+            // playposition already is inside the loop
+            return mixxx::audio::kInvalidFramePos;
+        }
+        if (oldLoop.endPosition.isValid() &&
+                currentPosition > oldLoop.endPosition &&
+                currentPosition > newLoop.startPosition) {
+            // Playposition was after a catching loop and is still
+            // a catching loop. nothing to do
+            return mixxx::audio::kInvalidFramePos;
+        }
+        if (currentPosition == newLoop.startPosition) {
+            // wrap around since the "end" is considered outside the loop
+            return newLoop.endPosition;
+        }
+    } else {
+        if (currentPosition >= newLoop.startPosition && currentPosition < newLoop.endPosition) {
+            return mixxx::audio::kInvalidFramePos;
+        }
+        if (oldLoop.startPosition.isValid() &&
+                currentPosition < oldLoop.startPosition &&
+                currentPosition < newLoop.endPosition) {
+            return mixxx::audio::kInvalidFramePos;
+        }
+        if (currentPosition == newLoop.endPosition) {
+            return newLoop.startPosition;
+        }
+    }
+
+    const mixxx::audio::FrameDiff_t newLoopSize = newLoop.endPosition - newLoop.startPosition;
+    DEBUG_ASSERT(newLoopSize > 0);
+    mixxx::audio::FramePos adjustedPosition = currentPosition;
+    if (adjustedPosition > newLoop.endPosition) {
+        // In case play head has already passed the new out position, seek in whole
+        // loop size steps back, as if playback has been looped within the boundaries
+        double adjustSteps =
+                ceil((adjustedPosition.value() - newLoop.endPosition.value()) /
+                        newLoopSize);
+        adjustedPosition -= adjustSteps * newLoopSize;
+        DEBUG_ASSERT(adjustedPosition < newLoop.endPosition);
+        VERIFY_OR_DEBUG_ASSERT(adjustedPosition >= newLoop.startPosition) {
+            // This can happen when offset calculation above has double precision
+            // issues (noticed around 0.00) which shifts the pos beyond loop in
+            qWarning()
+                    << "SHOULDN'T HAPPEN: adjustedPositionInsideAdjustedLoop "
+                       "set new position to before in point --"
+                    << " seeking to in point";
+            adjustedPosition = newLoop.startPosition;
+        }
+    } else if (adjustedPosition < newLoop.startPosition) {
+        // In case play head has already been looped back to the old loop in position,
+        // seek in whole loop size steps forward until we are in the new loop boundaries
+        double adjustSteps =
+                ceil((newLoop.startPosition.value() - adjustedPosition.value()) /
+                        newLoopSize);
+        adjustedPosition += adjustSteps * newLoopSize;
+        DEBUG_ASSERT(adjustedPosition >= newLoop.startPosition);
+        VERIFY_OR_DEBUG_ASSERT(adjustedPosition < newLoop.endPosition) {
+            // This can happen when offset calculation above has double precision
+            // issues (noticed around 0.00) which shifts the pos beyond loop out
+            qWarning()
+                    << "SHOULDN'T HAPPEN: adjustedPositionInsideAdjustedLoop "
+                       "set new position to out point or later--"
+                    << " seeking to in point";
+            adjustedPosition = newLoop.startPosition;
+        }
+    }
+    if (adjustedPosition != currentPosition) {
+        return adjustedPosition;
+    } else {
+        return mixxx::audio::kInvalidFramePos;
+    }
+}
+
 } // namespace
 
 // Used to generate the beatloop_%SIZE, beatjump_%SIZE, and loop_move_%SIZE CO
@@ -420,10 +542,8 @@ void LoopingControl::process(const double rate,
                     const auto targetPosition =
                             adjustedPositionInsideAdjustedLoop(currentPosition,
                                     rate < 0, // reverse
-                                    m_oldLoopInfo.startPosition,
-                                    m_oldLoopInfo.endPosition,
-                                    loopInfo.startPosition,
-                                    loopInfo.endPosition);
+                                    m_oldLoopInfo,
+                                    loopInfo);
                     if (targetPosition.isValid()) {
                         // jump immediately
                         seekAbs(targetPosition);
@@ -489,10 +609,8 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                     // should be moved with it
                     *pTargetPosition = adjustedPositionInsideAdjustedLoop(currentPosition,
                             reverse,
-                            m_oldLoopInfo.startPosition,
-                            m_oldLoopInfo.endPosition,
-                            loopInfo.startPosition,
-                            loopInfo.endPosition);
+                            m_oldLoopInfo,
+                            loopInfo);
                     break;
                 case LoopSeekMode::MovedOut: {
                     const bool movedOutForward = !reverse && loopInfo.endPosition < currentPosition;
@@ -503,10 +621,8 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                     if (movedOutForward || movedOutReverse) {
                         *pTargetPosition = adjustedPositionInsideAdjustedLoop(currentPosition,
                                 reverse,
-                                loopInfo.startPosition,
-                                loopInfo.endPosition,
-                                loopInfo.startPosition,
-                                loopInfo.endPosition);
+                                loopInfo,
+                                loopInfo);
                     }
                     break;
                 }
@@ -1472,47 +1588,7 @@ void LoopingControl::updateBeatLoopingControls() {
     clearActiveBeatLoop();
 }
 
-mixxx::audio::FramePos LoopingControl::findQuantizedBeatloopStart(
-        const mixxx::BeatsPointer& pBeats,
-        mixxx::audio::FramePos currentPosition,
-        double beats) {
-    // The closest beat might be ahead of play position and will cause a catching loop.
-    mixxx::audio::FramePos prevBeatPosition;
-    mixxx::audio::FramePos nextBeatPosition;
-    if (!pBeats->findPrevNextBeats(currentPosition, &prevBeatPosition, &nextBeatPosition, false)) {
-        return currentPosition;
-    }
 
-    const mixxx::audio::FrameDiff_t beatLength = nextBeatPosition - prevBeatPosition;
-    double loopLength = beatLength * beats;
-    if (beats >= 1.0) {
-        const mixxx::audio::FramePos closestBeatPosition =
-                (nextBeatPosition - currentPosition >
-                        currentPosition - prevBeatPosition)
-                ? prevBeatPosition
-                : nextBeatPosition;
-        return closestBeatPosition;
-    }
-
-    // In case of beat length less then 1 beat:
-    // (| - beats, ^ - current track's position):
-    //
-    // ...|...................^........|...
-    //
-    // If we press 1/2 beatloop we want loop from 50% to 100%,
-    // If I press 1/4 beatloop, we want loop from 50% to 75% etc
-    const mixxx::audio::FrameDiff_t framesSinceLastBeat =
-            currentPosition - prevBeatPosition;
-    // find the previous beat fraction and check if the current position is closer to this or the next one
-    // place the new loop start to the closer one
-    const mixxx::audio::FramePos previousFractionBeatPosition =
-            prevBeatPosition + floor(framesSinceLastBeat / loopLength) * loopLength;
-    double framesSinceLastFractionBeatPosition = currentPosition - previousFractionBeatPosition;
-    if (framesSinceLastFractionBeatPosition <= (loopLength / 2.0)) {
-        return previousFractionBeatPosition;
-    }
-    return previousFractionBeatPosition + loopLength;
-}
 
 void LoopingControl::slotBeatLoop(double beats,
         bool keepSetPoint,
@@ -1872,10 +1948,8 @@ mixxx::audio::FramePos LoopingControl::adjustedPositionForCurrentLoop(
     const auto targetPosition = adjustedPositionInsideAdjustedLoop(
             currentPosition,
             reverse,
-            loopInfo.startPosition,
-            loopInfo.endPosition,
-            loopInfo.startPosition,
-            loopInfo.endPosition);
+            loopInfo,
+            loopInfo);
     if (targetPosition.isValid()) {
         return targetPosition;
     } else {
@@ -1883,87 +1957,7 @@ mixxx::audio::FramePos LoopingControl::adjustedPositionForCurrentLoop(
     }
 }
 
-mixxx::audio::FramePos LoopingControl::adjustedPositionInsideAdjustedLoop(
-        mixxx::audio::FramePos currentPosition,
-        bool reverse,
-        mixxx::audio::FramePos oldLoopStartPosition,
-        mixxx::audio::FramePos oldLoopEndPosition,
-        mixxx::audio::FramePos newLoopStartPosition,
-        mixxx::audio::FramePos newLoopEndPosition) {
-    if (reverse) {
-        if (currentPosition <= newLoopEndPosition && currentPosition > newLoopStartPosition) {
-            // playposition already is inside the loop
-            return mixxx::audio::kInvalidFramePos;
-        }
-        if (oldLoopEndPosition.isValid() &&
-                currentPosition > oldLoopEndPosition &&
-                currentPosition > newLoopStartPosition) {
-            // Playposition was after) a catching loop and is still
-            // a catching loop. nothing to do
-            return mixxx::audio::kInvalidFramePos;
-        }
-        if (currentPosition == newLoopStartPosition) {
-            // wrap around since the "end" is considered outside the loop
-            return newLoopEndPosition;
-        }
-    } else {
-        if (currentPosition >= newLoopStartPosition && currentPosition < newLoopEndPosition) {
-            return mixxx::audio::kInvalidFramePos;
-        }
-        if (oldLoopStartPosition.isValid() &&
-                currentPosition < oldLoopStartPosition &&
-                currentPosition < newLoopEndPosition) {
-            return mixxx::audio::kInvalidFramePos;
-        }
-        if (currentPosition == newLoopEndPosition) {
-            return newLoopStartPosition;
-        }
-    }
 
-    const mixxx::audio::FrameDiff_t newLoopSize = newLoopEndPosition - newLoopStartPosition;
-    DEBUG_ASSERT(newLoopSize > 0);
-    mixxx::audio::FramePos adjustedPosition = currentPosition;
-    if (adjustedPosition > newLoopEndPosition) {
-        // In case play head has already passed the new out position, seek in whole
-        // loop size steps back, as if playback has been looped within the boundaries
-        double adjustSteps =
-                ceil((adjustedPosition.value() - newLoopEndPosition.value()) /
-                        newLoopSize);
-        adjustedPosition -= adjustSteps * newLoopSize;
-        DEBUG_ASSERT(adjustedPosition < newLoopEndPosition);
-        VERIFY_OR_DEBUG_ASSERT(adjustedPosition >= newLoopStartPosition) {
-            // This can happen when offset calculation above has double precision
-            // issues (noticed around 0.00) which shifts the pos beyond loop in
-            qWarning()
-                    << "SHOULDN'T HAPPEN: adjustedPositionInsideAdjustedLoop "
-                       "set new position to before in point --"
-                    << " seeking to in point";
-            adjustedPosition = newLoopStartPosition;
-        }
-    } else if (adjustedPosition < newLoopStartPosition) {
-        // In case play head has already been looped back to the old loop in position,
-        // seek in whole loop size steps forward until we are in the new loop boundaries
-        double adjustSteps =
-                ceil((newLoopStartPosition.value() - adjustedPosition.value()) /
-                        newLoopSize);
-        adjustedPosition += adjustSteps * newLoopSize;
-        DEBUG_ASSERT(adjustedPosition >= newLoopStartPosition);
-        VERIFY_OR_DEBUG_ASSERT(adjustedPosition < newLoopEndPosition) {
-            // This can happen when offset calculation above has double precision
-            // issues (noticed around 0.00) which shifts the pos beyond loop out
-            qWarning()
-                    << "SHOULDN'T HAPPEN: adjustedPositionInsideAdjustedLoop "
-                       "set new position to out point or later--"
-                    << " seeking to in point";
-            adjustedPosition = newLoopStartPosition;
-        }
-    }
-    if (adjustedPosition != currentPosition) {
-        return adjustedPosition;
-    } else {
-        return mixxx::audio::kInvalidFramePos;
-    }
-}
 
 BeatJumpControl::BeatJumpControl(const QString& group, double size)
         : m_dBeatJumpSize(size) {

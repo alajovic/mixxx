@@ -196,17 +196,6 @@ class LoopingControl : public EngineControl {
     // When a loop changes size such that the playposition is outside of the loop,
     // we can figure out the best place in the new loop to seek to maintain
     // the beat. It will even keep multi-bar phrasing correct with 4/4 tracks.
-    mixxx::audio::FramePos adjustedPositionInsideAdjustedLoop(
-            mixxx::audio::FramePos currentPosition,
-            bool reverse,
-            mixxx::audio::FramePos oldLoopInPosition,
-            mixxx::audio::FramePos oldLoopOutPosition,
-            mixxx::audio::FramePos newLoopInPosition,
-            mixxx::audio::FramePos newLoopOutPosition);
-    mixxx::audio::FramePos findQuantizedBeatloopStart(
-            const mixxx::BeatsPointer& pBeats,
-            mixxx::audio::FramePos currentPosition,
-            double beats);
 
     std::unique_ptr<ControlPushButton> m_pCOBeatLoopActivate;
     std::unique_ptr<ControlPushButton> m_pCOBeatLoopRollActivate;
