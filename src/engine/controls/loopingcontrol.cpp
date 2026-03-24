@@ -1613,28 +1613,18 @@ void LoopingControl::slotBeatLoop(double beats,
             ? static_cast<LoopAnchorPoint>(m_pCOLoopAnchor->get())
             : forcedAnchor;
     // Calculate the new loop start and end positions
-    // give start and end defaults so we can detect problems
-    LoopInfo newloopInfo = {mixxx::audio::kInvalidFramePos,
-            mixxx::audio::kInvalidFramePos,
-            LoopSeekMode::MovedOut};
     LoopInfo loopInfo = m_loopInfo.getValue();
     mixxx::audio::FramePos currentPosition = info.currentPosition;
-    // Start from the current position/closest beat and
-    // create the loop around X beats from there.
+    const bool anchorAtEnd = loopAnchor == LoopAnchorPoint::End;
+
+    // Determine the anchor position — the fixed point from which the other
+    // endpoint is computed.
+    mixxx::audio::FramePos anchorPosition;
     if (keepSetPoint) {
-        switch (loopAnchor) {
-        case LoopAnchorPoint::None:
-        case LoopAnchorPoint::Start:
-            newloopInfo.startPosition = loopInfo.startPosition.isValid()
-                    ? loopInfo.startPosition
-                    : math_min(info.currentPosition, info.trackEndPosition);
-            break;
-        case LoopAnchorPoint::End:
-            newloopInfo.endPosition = loopInfo.endPosition.isValid()
-                    ? loopInfo.endPosition
-                    : math_min(info.currentPosition, info.trackEndPosition);
-            break;
-        }
+        auto existing = anchorAtEnd ? loopInfo.endPosition : loopInfo.startPosition;
+        anchorPosition = existing.isValid()
+                ? existing
+                : math_min(info.currentPosition, trackEndPosition);
     } else {
         // If running reverse, move the loop one loop size to the left.
         // Thus, the loops end will be closest to the current position
@@ -1642,39 +1632,25 @@ void LoopingControl::slotBeatLoop(double beats,
             qWarning() << "LoopingControl: RateControl not set!";
             return;
         }
-        bool reverse = m_pRateControl->isReverseButtonPressed();
-        if (reverse) {
+        if (m_pRateControl->isReverseButtonPressed()) {
             currentPosition = pBeats->findNBeatsFromPosition(currentPosition, -beats);
         }
 
         bool quantize = quantizeEnabledAndHasTrueTrackBeats();
-        // loop_in is set to the closest beat if quantize is on and the loop size is >= 1 beat.
-        // The closest beat might be ahead of play position and will cause a catching loop.
-        switch (loopAnchor) {
-        case LoopAnchorPoint::None:
-        case LoopAnchorPoint::Start:
-            newloopInfo.startPosition = !quantize
-                    ? currentPosition
-                    : findQuantizedBeatloopStart(
-                              pBeats, currentPosition, beats);
-            break;
-        case LoopAnchorPoint::End:
-            newloopInfo.endPosition = !quantize
-                    ? currentPosition
-                    : findQuantizedBeatloopStart(
-                              pBeats, currentPosition, beats);
-            break;
-        }
+        anchorPosition = quantize
+                ? findQuantizedBeatloopStart(pBeats, currentPosition, beats)
+                : currentPosition;
     }
 
-    switch (loopAnchor) {
-    case LoopAnchorPoint::None:
-    case LoopAnchorPoint::Start:
-        newloopInfo.endPosition = pBeats->findNBeatsFromPosition(newloopInfo.startPosition, beats);
-        break;
-    case LoopAnchorPoint::End:
-        newloopInfo.startPosition = pBeats->findNBeatsFromPosition(newloopInfo.endPosition, -beats);
-        break;
+    // Compute both endpoints from the anchor
+    LoopInfo newloopInfo;
+    newloopInfo.seekMode = LoopSeekMode::MovedOut;
+    if (anchorAtEnd) {
+        newloopInfo.endPosition = anchorPosition;
+        newloopInfo.startPosition = pBeats->findNBeatsFromPosition(anchorPosition, -beats);
+    } else {
+        newloopInfo.startPosition = anchorPosition;
+        newloopInfo.endPosition = pBeats->findNBeatsFromPosition(anchorPosition, beats);
     }
 
     if (!newloopInfo.isValid() ||
