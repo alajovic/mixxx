@@ -2,6 +2,8 @@
 
 #include <QObject>
 #include <QStack>
+#include <memory>
+#include <vector>
 
 #include "control/controlvalue.h"
 #include "engine/controls/enginecontrol.h"
@@ -202,23 +204,23 @@ class LoopingControl : public EngineControl {
             mixxx::audio::FramePos currentPosition,
             double beats);
 
-    ControlPushButton* m_pCOBeatLoopActivate;
-    ControlPushButton* m_pCOBeatLoopRollActivate;
-    ControlObject* m_pCOLoopStartPosition;
-    ControlObject* m_pCOLoopEndPosition;
-    ControlObject* m_pCOLoopEnabled;
-    ControlPushButton* m_pCOLoopAnchor;
-    ControlPushButton* m_pLoopInButton;
-    ControlPushButton* m_pLoopInGotoButton;
-    ControlPushButton* m_pLoopOutButton;
-    ControlPushButton* m_pLoopOutGotoButton;
-    ControlPushButton* m_pLoopExitButton;
-    ControlPushButton* m_pReloopToggleButton;
-    ControlPushButton* m_pReloopAndStopButton;
-    ControlObject* m_pCOLoopScale;
-    ControlPushButton* m_pLoopHalveButton;
-    ControlPushButton* m_pLoopDoubleButton;
-    ControlPushButton* m_pLoopRemoveButton;
+    std::unique_ptr<ControlPushButton> m_pCOBeatLoopActivate;
+    std::unique_ptr<ControlPushButton> m_pCOBeatLoopRollActivate;
+    std::unique_ptr<ControlObject> m_pCOLoopStartPosition;
+    std::unique_ptr<ControlObject> m_pCOLoopEndPosition;
+    std::unique_ptr<ControlObject> m_pCOLoopEnabled;
+    std::unique_ptr<ControlPushButton> m_pCOLoopAnchor;
+    std::unique_ptr<ControlPushButton> m_pLoopInButton;
+    std::unique_ptr<ControlPushButton> m_pLoopInGotoButton;
+    std::unique_ptr<ControlPushButton> m_pLoopOutButton;
+    std::unique_ptr<ControlPushButton> m_pLoopOutGotoButton;
+    std::unique_ptr<ControlPushButton> m_pLoopExitButton;
+    std::unique_ptr<ControlPushButton> m_pReloopToggleButton;
+    std::unique_ptr<ControlPushButton> m_pReloopAndStopButton;
+    std::unique_ptr<ControlObject> m_pCOLoopScale;
+    std::unique_ptr<ControlPushButton> m_pLoopHalveButton;
+    std::unique_ptr<ControlPushButton> m_pLoopDoubleButton;
+    std::unique_ptr<ControlPushButton> m_pLoopRemoveButton;
     ControlObject* m_pSlipEnabled;
     RateControl* m_pRateControl;
     ControlObject* m_pPlayButton;
@@ -242,23 +244,23 @@ class LoopingControl : public EngineControl {
     QAtomicPointer<BeatLoopingControl> m_pActiveBeatLoop;
 
     // Base BeatLoop Control Object.
-    ControlObject* m_pCOBeatLoop;
-    ControlObject* m_pCOBeatLoopSize;
+    std::unique_ptr<ControlObject> m_pCOBeatLoop;
+    std::unique_ptr<ControlObject> m_pCOBeatLoopSize;
     // Different sizes for Beat Loops/Seeks.
     static double s_dBeatSizes[];
     // Array of BeatLoopingControls, one for each size.
-    QList<BeatLoopingControl*> m_beatLoops;
+    std::vector<std::unique_ptr<BeatLoopingControl>> m_beatLoops;
 
-    ControlObject* m_pCOBeatJump;
-    ControlObject* m_pCOBeatJumpSize;
-    ControlPushButton* m_pCOBeatJumpSizeHalve;
-    ControlPushButton* m_pCOBeatJumpSizeDouble;
-    ControlPushButton* m_pCOBeatJumpForward;
-    ControlPushButton* m_pCOBeatJumpBackward;
-    QList<BeatJumpControl*> m_beatJumps;
+    std::unique_ptr<ControlObject> m_pCOBeatJump;
+    std::unique_ptr<ControlObject> m_pCOBeatJumpSize;
+    std::unique_ptr<ControlPushButton> m_pCOBeatJumpSizeHalve;
+    std::unique_ptr<ControlPushButton> m_pCOBeatJumpSizeDouble;
+    std::unique_ptr<ControlPushButton> m_pCOBeatJumpForward;
+    std::unique_ptr<ControlPushButton> m_pCOBeatJumpBackward;
+    std::vector<std::unique_ptr<BeatJumpControl>> m_beatJumps;
 
-    ControlObject* m_pCOLoopMove;
-    QList<LoopMoveControl*> m_loopMoves;
+    std::unique_ptr<ControlObject> m_pCOLoopMove;
+    std::vector<std::unique_ptr<LoopMoveControl>> m_loopMoves;
 
     // objects below are written from an engine worker thread
     TrackPointer m_pTrack;
@@ -287,8 +289,8 @@ class LoopMoveControl : public QObject {
 
   private:
     double m_dLoopMoveSize;
-    ControlPushButton* m_pMoveForward;
-    ControlPushButton* m_pMoveBackward;
+    std::unique_ptr<ControlPushButton> m_pMoveForward;
+    std::unique_ptr<ControlPushButton> m_pMoveBackward;
 };
 
 // Class for handling beat jumps of a set size. This allows easy access from
@@ -308,8 +310,8 @@ class BeatJumpControl : public QObject {
 
   private:
     double m_dBeatJumpSize;
-    ControlPushButton* m_pJumpForward;
-    ControlPushButton* m_pJumpBackward;
+    std::unique_ptr<ControlPushButton> m_pJumpForward;
+    std::unique_ptr<ControlPushButton> m_pJumpBackward;
 };
 
 // Class for handling beat loops of a set size. This allows easy access from
