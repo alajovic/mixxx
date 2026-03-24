@@ -569,8 +569,7 @@ void LoopingControl::process(const double rate,
         if (m_bLoopingEnabled &&
                 m_loopAdjustTarget == LoopAdjustTarget::None &&
                 loopInfo.loop.isValid()) {
-            if (loopInfo.loop.startPosition != m_oldLoop.startPosition ||
-                    loopInfo.loop.endPosition != m_oldLoop.endPosition) {
+            if (loopInfo.loop != m_oldLoop) {
                 // bool seek is only valid after the loop has changed
                 if (loopInfo.seekMode == LoopSeekMode::Changed) {
                     // here the loop has changed and the play position
@@ -634,8 +633,7 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
     if (m_bLoopingEnabled &&
             loopInfo.loop.isValid()) {
         if (m_loopAdjustTarget == LoopAdjustTarget::None) {
-            if (loopInfo.loop.startPosition != m_oldLoop.startPosition ||
-                    loopInfo.loop.endPosition != m_oldLoop.endPosition) {
+            if (loopInfo.loop != m_oldLoop) {
                 // bool seek is only valid after the loop has changed
                 switch (loopInfo.seekMode) {
                 case LoopSeekMode::Changed:
