@@ -320,7 +320,7 @@ LoopingControl::~LoopingControl() = default;
 
 void LoopingControl::slotLoopScale(double scaleFactor) {
     LoopInfo loopInfo = m_loopInfo.getValue();
-    if (!loopInfo.startPosition.isValid() || !loopInfo.endPosition.isValid()) {
+    if (!loopInfo.isValid()) {
         return;
     }
 
@@ -400,8 +400,7 @@ void LoopingControl::process(const double rate,
         LoopInfo loopInfo = m_loopInfo.getValue();
         if (m_bLoopingEnabled &&
                 !m_bAdjustingLoopIn && !m_bAdjustingLoopOut &&
-                loopInfo.startPosition.isValid() &&
-                loopInfo.endPosition.isValid()) {
+                loopInfo.isValid()) {
             if (loopInfo.startPosition != m_oldLoopInfo.startPosition ||
                     loopInfo.endPosition != m_oldLoopInfo.endPosition) {
                 // bool seek is only valid after the loop has changed
@@ -469,8 +468,7 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
     }
 
     if (m_bLoopingEnabled &&
-            loopInfo.startPosition.isValid() &&
-            loopInfo.endPosition.isValid()) {
+            loopInfo.isValid()) {
         if (!m_bAdjustingLoopIn && !m_bAdjustingLoopOut) {
             if (loopInfo.startPosition != m_oldLoopInfo.startPosition ||
                     loopInfo.endPosition != m_oldLoopInfo.endPosition) {
@@ -795,7 +793,7 @@ void LoopingControl::setLoopInToCurrentPosition() {
     m_pCOLoopStartPosition->set(loopInfo.startPosition.toEngineSamplePosMaybeInvalid());
 
     // start looping
-    if (loopInfo.startPosition.isValid() && loopInfo.endPosition.isValid()) {
+    if (loopInfo.isValid()) {
         setLoopingEnabled(true);
         loopInfo.seekMode = LoopSeekMode::Changed;
     } else {
@@ -803,8 +801,7 @@ void LoopingControl::setLoopInToCurrentPosition() {
     }
 
     if (quantizeEnabledAndHasTrueTrackBeats() &&
-            loopInfo.startPosition.isValid() &&
-            loopInfo.endPosition.isValid() &&
+            loopInfo.isValid() &&
             loopInfo.startPosition < loopInfo.endPosition) {
         m_pCOBeatLoopSize->setAndConfirm(pBeats->numBeatsInRange(
                 loopInfo.startPosition, loopInfo.endPosition));
@@ -966,7 +963,7 @@ void LoopingControl::setLoopOutToCurrentPosition() {
     m_pCOLoopEndPosition->set(loopInfo.endPosition.toEngineSamplePosMaybeInvalid());
 
     // start looping
-    if (loopInfo.startPosition.isValid() && loopInfo.endPosition.isValid()) {
+    if (loopInfo.isValid()) {
         setLoopingEnabled(true);
         loopInfo.seekMode = LoopSeekMode::Changed;
     } else {
@@ -1065,8 +1062,7 @@ void LoopingControl::slotLoopEnabledValueChangeRequest(double value) {
             // Looping is currently disabled, try to enable the loop. In
             // contrast to the reloop_toggle CO, we jump in no case.
             LoopInfo loopInfo = m_loopInfo.getValue();
-            if (loopInfo.startPosition.isValid() &&
-                    loopInfo.endPosition.isValid() &&
+            if (loopInfo.isValid() &&
                     loopInfo.startPosition <= loopInfo.endPosition) {
                 // setAndConfirm is called by setLoopingEnabled
                 setLoopingEnabled(true);
@@ -1111,8 +1107,7 @@ void LoopingControl::slotReloopToggle(double val) {
         // If we're not looping, enable the loop. If the loop is ahead of the
         // current play position, do not jump to it.
         LoopInfo loopInfo = m_loopInfo.getValue();
-        if (loopInfo.startPosition.isValid() &&
-                loopInfo.endPosition.isValid() &&
+        if (loopInfo.isValid() &&
                 loopInfo.startPosition <= loopInfo.endPosition) {
             setLoopingEnabled(true);
             if (m_currentPosition.getValue() > loopInfo.endPosition) {
@@ -1284,7 +1279,7 @@ void LoopingControl::trackBeatsUpdated(mixxx::BeatsPointer pBeats) {
         m_trueTrackBeats = false;
     }
     LoopInfo loopInfo = m_loopInfo.getValue();
-    if (loopInfo.startPosition.isValid() && loopInfo.endPosition.isValid()) {
+    if (loopInfo.isValid()) {
         double loaded_loop_size = findBeatloopSizeForLoop(
                 loopInfo.startPosition, loopInfo.endPosition);
         if (loaded_loop_size != -1) {
@@ -1365,7 +1360,7 @@ void LoopingControl::storeLoopInfo() {
     }
 
     LoopInfo loopInfo = m_loopInfo.getValue();
-    if (loopInfo.startPosition.isValid() && loopInfo.endPosition.isValid()) {
+    if (loopInfo.isValid()) {
         m_prevLoopInfo.setValue(loopInfo);
     } else {
         // If we don't have a valid loop, yet, we store the current beatloop size.
@@ -1383,7 +1378,7 @@ void LoopingControl::restoreLoopInfo() {
     }
 
     LoopInfo prevLoopInfo = m_prevLoopInfo.getValue();
-    if (prevLoopInfo.startPosition.isValid() && prevLoopInfo.endPosition.isValid()) {
+    if (prevLoopInfo.isValid()) {
         setLoop(prevLoopInfo.startPosition, prevLoopInfo.endPosition, false);
         m_prevLoopInfo.setValue(LoopInfo{});
     } else {
@@ -1614,8 +1609,7 @@ void LoopingControl::slotBeatLoop(double beats,
         break;
     }
 
-    if (!newloopInfo.startPosition.isValid() ||
-            !newloopInfo.endPosition.isValid() ||
+    if (!newloopInfo.isValid() ||
             newloopInfo.startPosition >=
                     newloopInfo.endPosition // happens when the call above fails
             || (newloopInfo.endPosition > trackEndPosition &&
@@ -1650,7 +1644,7 @@ void LoopingControl::slotBeatLoop(double beats,
 
     // This check happens after setting m_pCOBeatLoopSize so
     // beatloop_size can be prepared without having a track loaded.
-    if (!newloopInfo.startPosition.isValid() || !newloopInfo.endPosition.isValid()) {
+    if (!newloopInfo.isValid()) {
         return;
     }
 
@@ -1820,7 +1814,7 @@ void LoopingControl::slotLoopMove(double beats) {
         return;
     }
     LoopInfo loopInfo = m_loopInfo.getValue();
-    if (!loopInfo.startPosition.isValid() || !loopInfo.endPosition.isValid()) {
+    if (!loopInfo.isValid()) {
         return;
     }
 

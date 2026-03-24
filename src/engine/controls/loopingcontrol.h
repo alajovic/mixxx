@@ -37,6 +37,10 @@ struct LoopInfo {
     mixxx::audio::FramePos startPosition = mixxx::audio::kInvalidFramePos;
     mixxx::audio::FramePos endPosition = mixxx::audio::kInvalidFramePos;
     LoopSeekMode seekMode = LoopSeekMode::None;
+
+    bool isValid() const {
+        return startPosition.isValid() && endPosition.isValid();
+    }
 };
 
 class LoopingControl : public EngineControl {
