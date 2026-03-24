@@ -193,9 +193,6 @@ class LoopingControl : public EngineControl {
     // size.
     double findBeatloopSizeForLoop(mixxx::audio::FramePos startPosition,
             mixxx::audio::FramePos endPosition) const;
-    // When a loop changes size such that the playposition is outside of the loop,
-    // we can figure out the best place in the new loop to seek to maintain
-    // the beat. It will even keep multi-bar phrasing correct with 4/4 tracks.
 
     std::unique_ptr<ControlPushButton> m_pCOBeatLoopActivate;
     std::unique_ptr<ControlPushButton> m_pCOBeatLoopRollActivate;

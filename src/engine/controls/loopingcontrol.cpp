@@ -124,6 +124,9 @@ mixxx::audio::FramePos findQuantizedBeatloopStart(
     return previousFractionBeatPosition + loopLength;
 }
 
+// When a loop changes size such that the playposition is outside of the loop,
+// figure out the best place in the new loop to seek to maintain the beat.
+// Keeps multi-bar phrasing correct with 4/4 tracks.
 mixxx::audio::FramePos adjustedPositionInsideAdjustedLoop(
         mixxx::audio::FramePos currentPosition,
         bool reverse,
