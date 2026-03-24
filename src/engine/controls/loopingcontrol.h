@@ -25,6 +25,12 @@ enum class LoopSeekMode {
     None,
 };
 
+enum class LoopAdjustTarget {
+    None,
+    LoopIn,
+    LoopOut,
+};
+
 enum class LoopAnchorPoint {
     Start, // The loop has been defined by its start point. Adjusting the
            // size will move the end point
@@ -94,10 +100,10 @@ class LoopingControl : public EngineControl {
         return m_bLoopingEnabled;
     }
     bool isAdjustLoopInActive() {
-        return m_bAdjustingLoopIn;
+        return m_loopAdjustTarget == LoopAdjustTarget::LoopIn;
     }
     bool isAdjustLoopOutActive() {
-        return m_bAdjustingLoopOut;
+        return m_loopAdjustTarget == LoopAdjustTarget::LoopOut;
     }
     bool isLoopRollActive() {
         return m_bLoopRollActive;
@@ -222,10 +228,8 @@ class LoopingControl : public EngineControl {
     bool m_bLoopingEnabled;
     bool m_bLoopRollActive;
     bool m_bLoopWasEnabledBeforeSlipEnable;
-    bool m_bAdjustingLoopIn;
-    bool m_bAdjustingLoopOut;
-    bool m_bAdjustingLoopInOld;
-    bool m_bAdjustingLoopOutOld;
+    LoopAdjustTarget m_loopAdjustTarget = LoopAdjustTarget::None;
+    LoopAdjustTarget m_loopAdjustTargetOld = LoopAdjustTarget::None;
     bool m_bLoopOutPressedWhileLoopDisabled;
     QStack<double> m_activeLoopRolls;
     ControlValueAtomic<LoopInfo> m_loopInfo;

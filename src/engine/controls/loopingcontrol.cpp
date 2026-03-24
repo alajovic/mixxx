@@ -189,10 +189,6 @@ LoopingControl::LoopingControl(const QString& group,
           m_bLoopingEnabled(false),
           m_bLoopRollActive(false),
           m_bLoopWasEnabledBeforeSlipEnable(false),
-          m_bAdjustingLoopIn(false),
-          m_bAdjustingLoopOut(false),
-          m_bAdjustingLoopInOld(false),
-          m_bAdjustingLoopOutOld(false),
           m_bLoopOutPressedWhileLoopDisabled(false),
           m_prevLoopSize(-1),
           m_trueTrackBeats(false) {
@@ -531,7 +527,7 @@ void LoopingControl::process(const double rate,
         // no transport, so we have to do scheduled seeks here
         LoopInfo loopInfo = m_loopInfo.getValue();
         if (m_bLoopingEnabled &&
-                !m_bAdjustingLoopIn && !m_bAdjustingLoopOut &&
+                m_loopAdjustTarget == LoopAdjustTarget::None &&
                 loopInfo.isValid()) {
             if (loopInfo.startPosition != m_oldLoopInfo.startPosition ||
                     loopInfo.endPosition != m_oldLoopInfo.endPosition) {
@@ -554,9 +550,9 @@ void LoopingControl::process(const double rate,
         }
     }
 
-    if (m_bAdjustingLoopIn) {
+    if (m_loopAdjustTarget == LoopAdjustTarget::LoopIn) {
         setLoopInToCurrentPosition();
-    } else if (m_bAdjustingLoopOut) {
+    } else if (m_loopAdjustTarget == LoopAdjustTarget::LoopOut) {
         setLoopOutToCurrentPosition();
     }
 }
@@ -568,29 +564,27 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
 
     LoopInfo loopInfo = m_loopInfo.getValue();
 
-    // m_bAdjustingLoopIn is true while the LoopIn button is pressed while a loop is active (slotLoopIn)
-    if (m_bAdjustingLoopInOld != m_bAdjustingLoopIn) {
-        m_bAdjustingLoopInOld = m_bAdjustingLoopIn;
+    if (m_loopAdjustTargetOld != m_loopAdjustTarget) {
+        auto oldTarget = m_loopAdjustTargetOld;
+        m_loopAdjustTargetOld = m_loopAdjustTarget;
 
         // When the LoopIn button is released in reverse mode we jump to the end of the loop to not fall out and disable the active loop
         // This must not happen in quantized mode. The newly set start is always ahead (in time, but behind spacially) of the current position so we don't jump.
         // Jumping to the end is then handled when the loop's start is reached later in this function.
-        if (reverse && !m_bAdjustingLoopIn && !(quantizeEnabledAndHasTrueTrackBeats())) {
+        if (oldTarget == LoopAdjustTarget::LoopIn &&
+                m_loopAdjustTarget != LoopAdjustTarget::LoopIn &&
+                reverse && !quantizeEnabledAndHasTrueTrackBeats()) {
             m_oldLoopInfo = loopInfo;
             *pTargetPosition = loopInfo.endPosition;
             return currentPosition;
         }
-    }
-
-    // m_bAdjustingLoopOut is true while the LoopOut button is pressed while a loop is active (slotLoopOut)
-    if (m_bAdjustingLoopOutOld != m_bAdjustingLoopOut) {
-        m_bAdjustingLoopOutOld = m_bAdjustingLoopOut;
 
         // When the LoopOut button is released in forward mode we jump to the start of the loop to not fall out and disable the active loop
         // This must not happen in quantized mode. The newly set end is always ahead of the current position so we don't jump.
         // Jumping to the start is then handled when the loop's end is reached later in this function.
-        if (!reverse && !m_bAdjustingLoopOut &&
-                !(quantizeEnabledAndHasTrueTrackBeats())) {
+        if (oldTarget == LoopAdjustTarget::LoopOut &&
+                m_loopAdjustTarget != LoopAdjustTarget::LoopOut &&
+                !reverse && !quantizeEnabledAndHasTrueTrackBeats()) {
             m_oldLoopInfo = loopInfo;
             *pTargetPosition = loopInfo.startPosition;
             return currentPosition;
@@ -599,7 +593,7 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
 
     if (m_bLoopingEnabled &&
             loopInfo.isValid()) {
-        if (!m_bAdjustingLoopIn && !m_bAdjustingLoopOut) {
+        if (m_loopAdjustTarget == LoopAdjustTarget::None) {
             if (loopInfo.startPosition != m_oldLoopInfo.startPosition ||
                     loopInfo.endPosition != m_oldLoopInfo.endPosition) {
                 // bool seek is only valid after the loop has changed
@@ -650,7 +644,7 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
             // Jump back to loop start, when reaching the track end this
             // prevents that the track stops outside the adjusted loop.
             if (!reverse) {
-                if (m_bAdjustingLoopIn) {
+                if (m_loopAdjustTarget == LoopAdjustTarget::LoopIn) {
                     // Just in case the user does not release loop-in in time.
                     *pTargetPosition = m_oldLoopInfo.startPosition;
                     return loopInfo.endPosition;
@@ -659,7 +653,7 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                 *pTargetPosition = loopInfo.startPosition;
                 return info.trackEndPosition;
             } else {
-                if (m_bAdjustingLoopOut) {
+                if (m_loopAdjustTarget == LoopAdjustTarget::LoopOut) {
                     // Just in case the user does not release loop-out in time.
                     *pTargetPosition = m_oldLoopInfo.endPosition;
                     return loopInfo.startPosition;
@@ -870,7 +864,7 @@ void LoopingControl::setLoopInToCurrentPosition() {
                     (nextBeatPosition - position > position - prevBeatPosition)
                     ? prevBeatPosition
                     : nextBeatPosition;
-            if (m_bAdjustingLoopIn) {
+            if (m_loopAdjustTarget == LoopAdjustTarget::LoopIn) {
                 if (closestBeatPosition == position) {
                     quantizedBeatPosition = closestBeatPosition;
                 } else {
@@ -978,12 +972,10 @@ void LoopingControl::slotLoopIn(double pressed) {
     // when this button is released.
     if (m_bLoopingEnabled) {
         if (pressed > 0.0) {
-            m_bAdjustingLoopIn = true;
-            // Adjusting both the in and out point at the same time makes no sense
-            m_bAdjustingLoopOut = false;
+            m_loopAdjustTarget = LoopAdjustTarget::LoopIn;
         } else {
             setLoopInToCurrentPosition();
-            m_bAdjustingLoopIn = false;
+            m_loopAdjustTarget = LoopAdjustTarget::None;
             LoopInfo loopInfo = m_loopInfo.getValue();
             if (loopInfo.startPosition < loopInfo.endPosition) {
                 emit loopUpdated(loopInfo.startPosition, loopInfo.endPosition);
@@ -996,7 +988,7 @@ void LoopingControl::slotLoopIn(double pressed) {
         if (pressed > 0.0) {
             setLoopInToCurrentPosition();
         }
-        m_bAdjustingLoopIn = false;
+        m_loopAdjustTarget = LoopAdjustTarget::None;
     }
 }
 
@@ -1029,7 +1021,7 @@ void LoopingControl::setLoopOutToCurrentPosition() {
                     (nextBeatPosition - position > position - prevBeatPosition)
                     ? prevBeatPosition
                     : nextBeatPosition;
-            if (m_bAdjustingLoopOut) {
+            if (m_loopAdjustTarget == LoopAdjustTarget::LoopOut) {
                 if (closestBeatPosition == position) {
                     quantizedBeatPosition = closestBeatPosition;
                 } else {
@@ -1121,9 +1113,7 @@ void LoopingControl::slotLoopOut(double pressed) {
     // when this button is released.
     if (m_bLoopingEnabled) {
         if (pressed > 0.0) {
-            m_bAdjustingLoopOut = true;
-            // Adjusting both the in and out point at the same time makes no sense
-            m_bAdjustingLoopIn = false;
+            m_loopAdjustTarget = LoopAdjustTarget::LoopOut;
         } else {
             // If this button was pressed to set the loop out point when loop
             // was disabled, that will enable looping, so avoid moving the
@@ -1136,7 +1126,7 @@ void LoopingControl::slotLoopOut(double pressed) {
                 } else {
                     emit loopReset();
                 }
-                m_bAdjustingLoopOut = false;
+                m_loopAdjustTarget = LoopAdjustTarget::None;
             } else {
                 m_bLoopOutPressedWhileLoopDisabled = false;
             }
@@ -1147,7 +1137,7 @@ void LoopingControl::slotLoopOut(double pressed) {
             setLoopOutToCurrentPosition();
             m_bLoopOutPressedWhileLoopDisabled = true;
         }
-        m_bAdjustingLoopOut = false;
+        m_loopAdjustTarget = LoopAdjustTarget::None;
     }
 }
 
@@ -1843,7 +1833,7 @@ void LoopingControl::slotBeatJump(double beats) {
     LoopInfo loopInfo = m_loopInfo.getValue();
     const auto currentPosition = m_currentPosition.getValue();
 
-    if (m_bLoopingEnabled && !m_bAdjustingLoopIn && !m_bAdjustingLoopOut &&
+    if (m_bLoopingEnabled && m_loopAdjustTarget == LoopAdjustTarget::None &&
             loopInfo.startPosition <= currentPosition &&
             loopInfo.endPosition >= currentPosition) {
         // If inside an active loop, move loop
