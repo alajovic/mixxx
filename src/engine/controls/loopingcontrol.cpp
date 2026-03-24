@@ -1484,15 +1484,15 @@ void LoopingControl::storeLoopInfo() {
         return;
     }
 
-    LoopInfo loopInfo = m_loopInfo.getValue();
-    if (loopInfo.loop.isValid()) {
-        m_prevLoopInfo.setValue(loopInfo);
+    const auto loop = m_loopInfo.getValue().loop;
+    if (loop.isValid()) {
+        m_prevLoop.setValue(loop);
     } else {
         // If we don't have a valid loop, yet, we store the current beatloop size.
         // This way this (default) value is available again for `beatloop_activate`
         // after disaling the (last) rolling loop.
         // Explicitly clear the last saved loop.
-        m_prevLoopInfo.setValue(LoopInfo{});
+        m_prevLoop.setValue(Loop{});
         m_prevLoopSize = m_pCOBeatLoopSize->get();
     }
 }
@@ -1502,10 +1502,10 @@ void LoopingControl::restoreLoopInfo() {
         return;
     }
 
-    const auto prevLoop = m_prevLoopInfo.getValue().loop;
+    const auto prevLoop = m_prevLoop.getValue();
     if (prevLoop.isValid()) {
         setLoop(prevLoop.startPosition, prevLoop.endPosition, false);
-        m_prevLoopInfo.setValue(LoopInfo{});
+        m_prevLoop.setValue(Loop{});
     } else {
         // This may happen when there was no loop set when we activated the
         // rolling loop that triggered storeLoopInfo(). Re-apply the loop size

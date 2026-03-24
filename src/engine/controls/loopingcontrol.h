@@ -234,7 +234,7 @@ class LoopingControl : public EngineControl {
     bool m_bLoopOutPressedWhileLoopDisabled;
     QStack<double> m_activeLoopRolls;
     ControlValueAtomic<LoopInfo> m_loopInfo;
-    ControlValueAtomic<LoopInfo> m_prevLoopInfo;
+    ControlValueAtomic<Loop> m_prevLoop;
     double m_prevLoopSize;
     Loop m_oldLoop;
     ControlValueAtomic<mixxx::audio::FramePos> m_currentPosition;
