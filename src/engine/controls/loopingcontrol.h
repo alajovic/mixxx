@@ -187,13 +187,7 @@ class LoopingControl : public EngineControl {
 
     // Fake beats that allow using looping/beatjump controls with no beats:
     // one 'beat' = one second
-    mixxx::BeatsPointer getFake60BpmBeats() const {
-        auto fakeBeats = mixxx::Beats::fromConstTempo(
-                frameInfo().sampleRate,
-                mixxx::audio::kStartFramePos,
-                mixxx::Bpm(60.0));
-        return fakeBeats;
-    }
+    mixxx::BeatsPointer getFake60BpmBeats() const;
 
     // Given loop in and out points, determine if this is a beatloop of a particular
     // size.

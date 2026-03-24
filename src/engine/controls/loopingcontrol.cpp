@@ -719,6 +719,13 @@ mixxx::audio::FramePos LoopingControl::getTrackFrame() const {
     return info.trackEndPosition;
 }
 
+mixxx::BeatsPointer LoopingControl::getFake60BpmBeats() const {
+    return mixxx::Beats::fromConstTempo(
+            frameInfo().sampleRate,
+            mixxx::audio::kStartFramePos,
+            mixxx::Bpm(60.0));
+}
+
 void LoopingControl::hintReader(gsl::not_null<HintVector*> pHintList) {
     LoopInfo loopInfo = m_loopInfo.getValue();
     Hint loop_hint;
