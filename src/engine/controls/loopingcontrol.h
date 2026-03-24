@@ -39,14 +39,24 @@ enum class LoopAnchorPoint {
     None,  // Used to indicate the end of the enum type and the null type
 };
 
-struct LoopInfo {
+struct Loop {
     mixxx::audio::FramePos startPosition = mixxx::audio::kInvalidFramePos;
     mixxx::audio::FramePos endPosition = mixxx::audio::kInvalidFramePos;
-    LoopSeekMode seekMode = LoopSeekMode::None;
 
     bool isValid() const {
         return startPosition.isValid() && endPosition.isValid();
     }
+
+    mixxx::audio::FrameDiff_t length() const {
+        return endPosition - startPosition;
+    }
+
+    friend bool operator==(const Loop& lhs, const Loop& rhs) = default;
+};
+
+struct LoopInfo {
+    Loop loop;
+    LoopSeekMode seekMode = LoopSeekMode::None;
 };
 
 class LoopingControl : public EngineControl {
@@ -182,7 +192,7 @@ class LoopingControl : public EngineControl {
     void clearActiveBeatLoop();
     void clearLoopInfoAndControls();
     void updateBeatLoopingControls();
-    bool currentLoopMatchesBeatloopSize(const LoopInfo& loopInfo) const;
+    bool currentLoopMatchesBeatloopSize(const Loop& loop) const;
     bool quantizeEnabledAndHasTrueTrackBeats() const;
 
     // Fake beats that allow using looping/beatjump controls with no beats:
@@ -226,7 +236,7 @@ class LoopingControl : public EngineControl {
     ControlValueAtomic<LoopInfo> m_loopInfo;
     ControlValueAtomic<LoopInfo> m_prevLoopInfo;
     double m_prevLoopSize;
-    LoopInfo m_oldLoopInfo;
+    Loop m_oldLoop;
     ControlValueAtomic<mixxx::audio::FramePos> m_currentPosition;
     ControlObject* m_pQuantizeEnabled;
     QAtomicPointer<BeatLoopingControl> m_pActiveBeatLoop;

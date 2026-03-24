@@ -1485,15 +1485,15 @@ void EngineBuffer::updateIndicators(double speed, std::size_t bufferSize) {
     const double fFractionalPlaypos = fractionalPlayposFromAbsolute(m_playPos);
     const double fFractionalSlipPos = fractionalPlayposFromAbsolute(m_slipPos);
 
-    auto loopInfo = m_pLoopingControl->getLoopInfo();
+    const auto loop = m_pLoopingControl->getLoopInfo().loop;
 
     double fFractionalLoopStartPos = 0.0;
-    if (loopInfo.startPosition.isValid()) {
-        fFractionalLoopStartPos = fractionalPlayposFromAbsolute(loopInfo.startPosition);
+    if (loop.startPosition.isValid()) {
+        fFractionalLoopStartPos = fractionalPlayposFromAbsolute(loop.startPosition);
     }
     double fFractionalLoopEndPos = 0.0;
-    if (loopInfo.endPosition.isValid()) {
-        fFractionalLoopEndPos = fractionalPlayposFromAbsolute(loopInfo.endPosition);
+    if (loop.endPosition.isValid()) {
+        fFractionalLoopEndPos = fractionalPlayposFromAbsolute(loop.endPosition);
     }
 
     const double tempoTrackSeconds = m_trackEndPositionOld.value() /
