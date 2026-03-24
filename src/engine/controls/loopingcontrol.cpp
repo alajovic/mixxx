@@ -35,6 +35,43 @@ constexpr std::array kBeatSizes = {0.03125,
 
 constexpr mixxx::audio::FrameDiff_t kMinimumAudibleLoopSizeFrames = 150;
 
+// Snap position to the nearest beat, with directional preference depending on
+// whether the user is actively adjusting a loop point.
+//  - LoopIn:  prefer prevBeat (loop start should be at or before current pos)
+//  - LoopOut: prefer nextBeat (loop end should be at or after current pos)
+//  - None:    snap to closest beat
+// Returns kInvalidFramePos if beats can't be found.
+mixxx::audio::FramePos quantizeToNearestBeat(
+        const mixxx::BeatsPointer& pBeats,
+        mixxx::audio::FramePos position,
+        mixxx::audio::FramePos trackEndPosition,
+        LoopAdjustTarget adjustTarget) {
+    mixxx::audio::FramePos prevBeat;
+    mixxx::audio::FramePos nextBeat;
+    if (!pBeats->findPrevNextBeats(position, &prevBeat, &nextBeat, false)) {
+        return mixxx::audio::kInvalidFramePos;
+    }
+
+    const auto closestBeat =
+            (nextBeat - position > position - prevBeat)
+            ? prevBeat
+            : nextBeat;
+
+    switch (adjustTarget) {
+    case LoopAdjustTarget::LoopIn:
+        return (closestBeat == position) ? closestBeat : prevBeat;
+    case LoopAdjustTarget::LoopOut:
+        if (closestBeat == position) {
+            return closestBeat;
+        }
+        return (nextBeat > trackEndPosition) ? prevBeat : nextBeat;
+    case LoopAdjustTarget::None:
+        return (closestBeat > trackEndPosition) ? prevBeat : closestBeat;
+    }
+    // unreachable
+    return mixxx::audio::kInvalidFramePos;
+}
+
 // returns true if a is valid and is fairly close to target (within +/- 1 frame).
 bool positionNear(mixxx::audio::FramePos a, mixxx::audio::FramePos target) {
     return a.isValid() && a > target - 1 && a < target + 1;
@@ -856,27 +893,9 @@ void LoopingControl::setLoopInToCurrentPosition() {
     // a future runs, depending on the buffering.
     mixxx::audio::FramePos position = math_min(info.currentPosition, info.trackEndPosition);
     if (quantizeEnabledAndHasTrueTrackBeats()) {
-        mixxx::audio::FramePos prevBeatPosition;
-        mixxx::audio::FramePos nextBeatPosition;
-        if (pBeats->findPrevNextBeats(position, &prevBeatPosition, &nextBeatPosition, false)) {
-            // both beat positions are valid
-            mixxx::audio::FramePos closestBeatPosition =
-                    (nextBeatPosition - position > position - prevBeatPosition)
-                    ? prevBeatPosition
-                    : nextBeatPosition;
-            if (m_loopAdjustTarget == LoopAdjustTarget::LoopIn) {
-                if (closestBeatPosition == position) {
-                    quantizedBeatPosition = closestBeatPosition;
-                } else {
-                    quantizedBeatPosition = prevBeatPosition;
-                }
-            } else {
-                if (closestBeatPosition > info.trackEndPosition) {
-                    quantizedBeatPosition = prevBeatPosition;
-                } else {
-                    quantizedBeatPosition = closestBeatPosition;
-                }
-            }
+        quantizedBeatPosition = quantizeToNearestBeat(
+                pBeats, position, info.trackEndPosition, m_loopAdjustTarget);
+        if (quantizedBeatPosition.isValid()) {
             position = quantizedBeatPosition;
         }
     }
@@ -1013,31 +1032,9 @@ void LoopingControl::setLoopOutToCurrentPosition() {
     // a future runs, depending on the buffering.
     mixxx::audio::FramePos position = math_min(info.currentPosition, info.trackEndPosition);
     if (quantizeEnabledAndHasTrueTrackBeats()) {
-        mixxx::audio::FramePos prevBeatPosition;
-        mixxx::audio::FramePos nextBeatPosition;
-        if (pBeats->findPrevNextBeats(position, &prevBeatPosition, &nextBeatPosition, false)) {
-            // both beat positions are valid
-            const mixxx::audio::FramePos closestBeatPosition =
-                    (nextBeatPosition - position > position - prevBeatPosition)
-                    ? prevBeatPosition
-                    : nextBeatPosition;
-            if (m_loopAdjustTarget == LoopAdjustTarget::LoopOut) {
-                if (closestBeatPosition == position) {
-                    quantizedBeatPosition = closestBeatPosition;
-                } else {
-                    if (nextBeatPosition > info.trackEndPosition) {
-                        quantizedBeatPosition = prevBeatPosition;
-                    } else {
-                        quantizedBeatPosition = nextBeatPosition;
-                    }
-                }
-            } else {
-                if (closestBeatPosition > info.trackEndPosition) {
-                    quantizedBeatPosition = prevBeatPosition;
-                } else {
-                    quantizedBeatPosition = closestBeatPosition;
-                }
-            }
+        quantizedBeatPosition = quantizeToNearestBeat(
+                pBeats, position, info.trackEndPosition, m_loopAdjustTarget);
+        if (quantizedBeatPosition.isValid()) {
             // Note: with quantize enabled and playpos AFTER an inactive loop,
             // the new loop_out might snap to the exact the same position as before.
             // Then m_oldLoopInfo would be unchanged and process() would not seek back
