@@ -22,6 +22,12 @@ constexpr mixxx::audio::FrameDiff_t kMinimumAudibleLoopSizeFrames = 150;
 bool positionNear(mixxx::audio::FramePos a, mixxx::audio::FramePos target) {
     return a.isValid() && a > target - 1 && a < target + 1;
 }
+
+bool nearlySameLoop(LoopInfo const& first, LoopInfo const& second) {
+    return positionNear(first.startPosition, second.startPosition) &&
+            positionNear(first.endPosition, second.endPosition);
+}
+
 } // namespace
 
 double LoopingControl::s_dBeatSizes[] = { 0.03125, 0.0625, 0.125, 0.25, 0.5,
@@ -462,18 +468,12 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                             loopInfo.endPosition);
                     break;
                 case LoopSeekMode::MovedOut: {
-                    bool movedOut = false;
-                    // Check if we have moved out of the loop, before we could enable it
-                    if (reverse) {
-                        if (loopInfo.startPosition > currentPosition) {
-                            movedOut = true;
-                        }
-                    } else {
-                        if (loopInfo.endPosition < currentPosition) {
-                            movedOut = true;
-                        }
-                    }
-                    if (movedOut) {
+                    const bool movedOutForward = !reverse && loopInfo.endPosition < currentPosition;
+                    const bool movedOutReverse =
+                            reverse && loopInfo.startPosition > currentPosition;
+
+                    // Check if we have moved out of the loop before we could enable it
+                    if (movedOutForward || movedOutReverse) {
                         *pTargetPosition = adjustedPositionInsideAdjustedLoop(currentPosition,
                                 reverse,
                                 loopInfo.startPosition,
@@ -1451,7 +1451,7 @@ void LoopingControl::updateBeatLoopingControls() {
 mixxx::audio::FramePos LoopingControl::findQuantizedBeatloopStart(
         const mixxx::BeatsPointer& pBeats,
         mixxx::audio::FramePos currentPosition,
-        double beats) const {
+        double beats) {
     // The closest beat might be ahead of play position and will cause a catching loop.
     mixxx::audio::FramePos prevBeatPosition;
     mixxx::audio::FramePos nextBeatPosition;
@@ -1639,23 +1639,23 @@ void LoopingControl::slotBeatLoop(double beats,
         return;
     }
 
+    bool const loopEnabled = enable || m_bLoopingEnabled;
+
     switch (loopAnchor) {
     case LoopAnchorPoint::None:
-    case LoopAnchorPoint::Start:
+    case LoopAnchorPoint::Start: {
         // If the start point has changed, or the loop is not enabled,
         // or if the endpoints are nearly the same, do not seek forward into the adjusted loop.
-        if (!keepSetPoint ||
-                !(enable || m_bLoopingEnabled) ||
-                (positionNear(newloopInfo.startPosition, loopInfo.startPosition) &&
-                        positionNear(newloopInfo.endPosition, loopInfo.endPosition))) {
-            newloopInfo.seekMode = LoopSeekMode::MovedOut;
-        } else {
+        if (keepSetPoint && loopEnabled && !nearlySameLoop(newloopInfo, loopInfo)) {
             newloopInfo.seekMode = LoopSeekMode::Changed;
+        } else {
+            newloopInfo.seekMode = LoopSeekMode::MovedOut;
         }
         break;
+    }
     case LoopAnchorPoint::End:
         // If the end point is behind the current position and the loop is enabled, seek backward .
-        if (!(enable || m_bLoopingEnabled) || newloopInfo.endPosition > currentPosition) {
+        if (!loopEnabled || newloopInfo.endPosition > currentPosition) {
             newloopInfo.seekMode = LoopSeekMode::MovedOut;
         } else {
             newloopInfo.seekMode = LoopSeekMode::Changed;
@@ -2027,7 +2027,7 @@ BeatLoopingControl::BeatLoopingControl(const QString& group, double size)
             &ControlObject::valueChanged,
             this,
             [this](double value) {
-                slotActivate(value, LoopingControl::LoopAnchorPoint::None);
+                slotActivate(value, LoopAnchorPoint::None);
             },
             Qt::DirectConnection);
     // And the same but setting it from the end point instead of starting
@@ -2046,7 +2046,7 @@ BeatLoopingControl::BeatLoopingControl(const QString& group, double size)
             &ControlObject::valueChanged,
             this,
             [this](double value) {
-                slotToggle(value, LoopingControl::LoopAnchorPoint::None);
+                slotToggle(value, LoopAnchorPoint::None);
             },
             Qt::DirectConnection);
     // And the same but setting it from the end point instead of starting
@@ -2066,7 +2066,7 @@ BeatLoopingControl::BeatLoopingControl(const QString& group, double size)
             &ControlObject::valueChanged,
             this,
             [this](double value) {
-                slotActivateRoll(value, LoopingControl::LoopAnchorPoint::None);
+                slotActivateRoll(value, LoopAnchorPoint::None);
             },
             Qt::DirectConnection);
     // And the same but setting it from the end point instead of starting
@@ -2103,13 +2103,13 @@ void BeatLoopingControl::activate() {
 void BeatLoopingControl::slotLegacy(double v) {
     //qDebug() << "slotLegacy" << m_dBeatLoopSize << "v" << v;
     if (v > 0) {
-        emit activateBeatLoop(this, LoopingControl::LoopAnchorPoint::None);
+        emit activateBeatLoop(this, LoopAnchorPoint::None);
     } else {
         emit deactivateBeatLoop(this);
     }
 }
 
-void BeatLoopingControl::slotActivate(double value, LoopingControl::LoopAnchorPoint anchor) {
+void BeatLoopingControl::slotActivate(double value, LoopAnchorPoint anchor) {
     //qDebug() << "slotActivate" << m_dBeatLoopSize << "value" << value;
     if (value == 0) {
         return;
@@ -2117,7 +2117,7 @@ void BeatLoopingControl::slotActivate(double value, LoopingControl::LoopAnchorPo
     emit activateBeatLoop(this, anchor);
 }
 
-void BeatLoopingControl::slotActivateRoll(double v, LoopingControl::LoopAnchorPoint anchor) {
+void BeatLoopingControl::slotActivateRoll(double v, LoopAnchorPoint anchor) {
     //qDebug() << "slotActivateRoll" << m_dBeatLoopSize << "v" << v;
     if (v > 0) {
         emit activateBeatLoopRoll(this, anchor);
@@ -2126,7 +2126,7 @@ void BeatLoopingControl::slotActivateRoll(double v, LoopingControl::LoopAnchorPo
     }
 }
 
-void BeatLoopingControl::slotToggle(double value, LoopingControl::LoopAnchorPoint anchor) {
+void BeatLoopingControl::slotToggle(double value, LoopAnchorPoint anchor) {
     //qDebug() << "slotToggle" << m_dBeatLoopSize << "value" << value;
     if (value == 0) {
         return;
@@ -2139,13 +2139,13 @@ void BeatLoopingControl::slotToggle(double value, LoopingControl::LoopAnchorPoin
 }
 
 void BeatLoopingControl::slotReverseActivate(double value) {
-    slotActivate(value, LoopingControl::LoopAnchorPoint::End);
+    slotActivate(value, LoopAnchorPoint::End);
 }
 
 void BeatLoopingControl::slotReverseActivateRoll(double v) {
-    slotActivateRoll(v, LoopingControl::LoopAnchorPoint::End);
+    slotActivateRoll(v, LoopAnchorPoint::End);
 }
 
 void BeatLoopingControl::slotReverseToggle(double value) {
-    slotToggle(value, LoopingControl::LoopAnchorPoint::End);
+    slotToggle(value, LoopAnchorPoint::End);
 }

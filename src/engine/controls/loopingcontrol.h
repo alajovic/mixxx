@@ -17,6 +17,26 @@ class LoopMoveControl;
 class BeatJumpControl;
 class BeatLoopingControl;
 
+enum class LoopSeekMode {
+    Changed, // force the playposition to be inside the loop after adjusting it.
+    MovedOut,
+    None,
+};
+
+enum class LoopAnchorPoint {
+    Start, // The loop has been defined by its start point. Adjusting the
+           // size will move the end point
+    End,   // The loop has been defined by its end point. Adjusting the size
+           // will move the end point
+    None,  // Used to indicate the end of the enum type and the null type
+};
+
+struct LoopInfo {
+    mixxx::audio::FramePos startPosition = mixxx::audio::kInvalidFramePos;
+    mixxx::audio::FramePos endPosition = mixxx::audio::kInvalidFramePos;
+    LoopSeekMode seekMode = LoopSeekMode::None;
+};
+
 class LoopingControl : public EngineControl {
     Q_OBJECT
   public:
@@ -57,26 +77,6 @@ class LoopingControl : public EngineControl {
     void setLoop(mixxx::audio::FramePos startPosition,
             mixxx::audio::FramePos endPosition,
             bool enabled);
-
-    enum class LoopSeekMode {
-        Changed, // force the playposition to be inside the loop after adjusting it.
-        MovedOut,
-        None,
-    };
-
-    enum class LoopAnchorPoint {
-        Start, // The loop has been defined by its start point. Adjusting the
-               // size will move the end point
-        End,   // The loop has been defined by its end point. Adjusting the size
-               // will move the end point
-        None,  // Used to indicate the end of the enum type and the null type
-    };
-
-    struct LoopInfo {
-        mixxx::audio::FramePos startPosition = mixxx::audio::kInvalidFramePos;
-        mixxx::audio::FramePos endPosition = mixxx::audio::kInvalidFramePos;
-        LoopSeekMode seekMode = LoopSeekMode::None;
-    };
 
     LoopInfo getLoopInfo() {
         return m_loopInfo.getValue();
@@ -126,17 +126,17 @@ class LoopingControl : public EngineControl {
     void slotBeatLoop(double loopSize,
             bool keepSetPoint = false,
             bool enable = true,
-            LoopingControl::LoopAnchorPoint forcedAnchor =
-                    LoopingControl::LoopAnchorPoint::None);
+            LoopAnchorPoint forcedAnchor =
+                    LoopAnchorPoint::None);
     void slotBeatLoopSizeChangeRequest(double beats);
     void slotBeatLoopToggle(double pressed);
     void slotBeatLoopRollActivate(double pressed);
     void slotBeatLoopActivate(BeatLoopingControl* pBeatLoopControl,
-            LoopingControl::LoopAnchorPoint forcedAnchor =
-                    LoopingControl::LoopAnchorPoint::None);
+            LoopAnchorPoint forcedAnchor =
+                    LoopAnchorPoint::None);
     void slotBeatLoopActivateRoll(BeatLoopingControl* pBeatLoopControl,
-            LoopingControl::LoopAnchorPoint forcedAnchor =
-                    LoopingControl::LoopAnchorPoint::None);
+            LoopAnchorPoint forcedAnchor =
+                    LoopAnchorPoint::None);
     void slotBeatLoopDeactivate(BeatLoopingControl* pBeatLoopControl);
     void slotBeatLoopDeactivateRoll(BeatLoopingControl* pBeatLoopControl);
 
@@ -200,7 +200,7 @@ class LoopingControl : public EngineControl {
     mixxx::audio::FramePos findQuantizedBeatloopStart(
             const mixxx::BeatsPointer& pBeats,
             mixxx::audio::FramePos currentPosition,
-            double beats) const;
+            double beats);
 
     ControlPushButton* m_pCOBeatLoopActivate;
     ControlPushButton* m_pCOBeatLoopRollActivate;
@@ -326,18 +326,18 @@ class BeatLoopingControl : public QObject {
     }
   public slots:
     void slotLegacy(double value);
-    void slotActivate(double value, LoopingControl::LoopAnchorPoint forcedAnchor);
-    void slotActivateRoll(double value, LoopingControl::LoopAnchorPoint forcedAnchor);
-    void slotToggle(double value, LoopingControl::LoopAnchorPoint forcedAnchor);
+    void slotActivate(double value, LoopAnchorPoint forcedAnchor);
+    void slotActivateRoll(double value, LoopAnchorPoint forcedAnchor);
+    void slotToggle(double value, LoopAnchorPoint forcedAnchor);
   private slots:
     void slotReverseActivate(double value);
     void slotReverseActivateRoll(double value);
     void slotReverseToggle(double value);
 
   signals:
-    void activateBeatLoop(BeatLoopingControl*, LoopingControl::LoopAnchorPoint forcedAnchor);
+    void activateBeatLoop(BeatLoopingControl*, LoopAnchorPoint forcedAnchor);
     void deactivateBeatLoop(BeatLoopingControl*);
-    void activateBeatLoopRoll(BeatLoopingControl*, LoopingControl::LoopAnchorPoint forcedAnchor);
+    void activateBeatLoopRoll(BeatLoopingControl*, LoopAnchorPoint forcedAnchor);
     void deactivateBeatLoopRoll(BeatLoopingControl*);
 
   private:
