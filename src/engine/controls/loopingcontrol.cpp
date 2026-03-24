@@ -204,8 +204,6 @@ mixxx::audio::FramePos adjustedPositionInsideAdjustedLoop(
     }
 }
 
-} // namespace
-
 // Used to generate the beatloop_%SIZE, beatjump_%SIZE, and loop_move_%SIZE CO
 // ConfigKeys.
 ConfigKey keyForControl(const QString& group, const QString& ctrlName, double num) {
@@ -214,6 +212,8 @@ ConfigKey keyForControl(const QString& group, const QString& ctrlName, double nu
     key.item = ctrlName.arg(num);
     return key;
 }
+
+} // namespace
 
 // static
 QList<double> LoopingControl::getBeatSizes() {
