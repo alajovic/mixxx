@@ -52,10 +52,9 @@ mixxx::audio::FramePos quantizeToNearestBeat(
         return mixxx::audio::kInvalidFramePos;
     }
 
-    const auto closestBeat =
-            (nextBeat - position > position - prevBeat)
-            ? prevBeat
-            : nextBeat;
+    const auto distanceToPrev = position - prevBeat;
+    const auto distanceToNext = nextBeat - position;
+    const auto closestBeat = distanceToNext > distanceToPrev ? prevBeat : nextBeat;
 
     switch (adjustTarget) {
     case LoopAdjustTarget::LoopIn:
