@@ -16,6 +16,23 @@
 #include "util/math.h"
 
 namespace {
+
+constexpr std::array kBeatSizes = {0.03125,
+        0.0625,
+        0.125,
+        0.25,
+        0.5,
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        32.0,
+        64.0,
+        128.0,
+        256.0,
+        512.0};
+
 constexpr mixxx::audio::FrameDiff_t kMinimumAudibleLoopSizeFrames = 150;
 
 // returns true if a is valid and is fairly close to target (within +/- 1 frame).
@@ -30,9 +47,6 @@ bool nearlySameLoop(LoopInfo const& first, LoopInfo const& second) {
 
 } // namespace
 
-double LoopingControl::s_dBeatSizes[] = { 0.03125, 0.0625, 0.125, 0.25, 0.5,
-                                          1, 2, 4, 8, 16, 32, 64, 128, 256, 512 };
-
 // Used to generate the beatloop_%SIZE, beatjump_%SIZE, and loop_move_%SIZE CO
 // ConfigKeys.
 ConfigKey keyForControl(const QString& group, const QString& ctrlName, double num) {
@@ -44,11 +58,7 @@ ConfigKey keyForControl(const QString& group, const QString& ctrlName, double nu
 
 // static
 QList<double> LoopingControl::getBeatSizes() {
-    QList<double> result;
-    for (unsigned int i = 0; i < (sizeof(s_dBeatSizes) / sizeof(s_dBeatSizes[0])); ++i) {
-        result.append(s_dBeatSizes[i]);
-    }
-    return result;
+    return QList<double>(kBeatSizes.begin(), kBeatSizes.end());
 }
 
 LoopingControl::LoopingControl(const QString& group,
@@ -185,8 +195,8 @@ LoopingControl::LoopingControl(const QString& group,
 
     // Here we create corresponding beatloop_(SIZE) CO's which all call the same
     // BeatControl, but with a set value.
-    for (unsigned int i = 0; i < (sizeof(s_dBeatSizes) / sizeof(s_dBeatSizes[0])); ++i) {
-        auto pBeatLoop = std::make_unique<BeatLoopingControl>(group, s_dBeatSizes[i]);
+    for (auto beatSize : kBeatSizes) {
+        auto pBeatLoop = std::make_unique<BeatLoopingControl>(group, beatSize);
         connect(pBeatLoop.get(),
                 &BeatLoopingControl::activateBeatLoop,
                 this,
@@ -257,8 +267,8 @@ LoopingControl::LoopingControl(const QString& group,
 
     // Create beatjump_(SIZE) CO's which all call beatjump, but with a set
     // value.
-    for (unsigned int i = 0; i < (sizeof(s_dBeatSizes) / sizeof(s_dBeatSizes[0])); ++i) {
-        auto pBeatJump = std::make_unique<BeatJumpControl>(group, s_dBeatSizes[i]);
+    for (auto beatSize : kBeatSizes) {
+        auto pBeatJump = std::make_unique<BeatJumpControl>(group, beatSize);
         connect(pBeatJump.get(),
                 &BeatJumpControl::beatJump,
                 this,
@@ -276,8 +286,8 @@ LoopingControl::LoopingControl(const QString& group,
 
     // Create loop_move_(SIZE) CO's which all call loop_move, but with a set
     // value.
-    for (unsigned int i = 0; i < (sizeof(s_dBeatSizes) / sizeof(s_dBeatSizes[0])); ++i) {
-        auto pLoopMove = std::make_unique<LoopMoveControl>(group, s_dBeatSizes[i]);
+    for (auto beatSize : kBeatSizes) {
+        auto pLoopMove = std::make_unique<LoopMoveControl>(group, beatSize);
         connect(pLoopMove.get(),
                 &LoopMoveControl::loopMove,
                 this,
@@ -1429,11 +1439,11 @@ double LoopingControl::findBeatloopSizeForLoop(
         return -1;
     }
 
-    for (unsigned int i = 0; i < (sizeof(s_dBeatSizes) / sizeof(s_dBeatSizes[0])); ++i) {
-        const auto loopEndPosition = pBeats->findNBeatsFromPosition(startPosition, s_dBeatSizes[i]);
+    for (auto beatSize : kBeatSizes) {
+        const auto loopEndPosition = pBeats->findNBeatsFromPosition(startPosition, beatSize);
         if (loopEndPosition.isValid()) {
             if (endPosition > (loopEndPosition - 1) && endPosition < (loopEndPosition + 1)) {
-                return s_dBeatSizes[i];
+                return beatSize;
             }
         }
     }
@@ -1520,8 +1530,8 @@ void LoopingControl::slotBeatLoop(double beats,
         m_currentPosition.setValue(seekPosition);
     }
 
-    double maxBeatSize = s_dBeatSizes[sizeof(s_dBeatSizes)/sizeof(s_dBeatSizes[0]) - 1];
-    double minBeatSize = s_dBeatSizes[0];
+    double maxBeatSize = kBeatSizes.back();
+    double minBeatSize = kBeatSizes.front();
     if (beats < 0) {
         // For now we do not handle negative beatloops.
         clearActiveBeatLoop();
@@ -1696,8 +1706,8 @@ void LoopingControl::slotBeatLoopSizeChangeRequest(double beats) {
     // slotBeatLoop will call m_pCOBeatLoopSize->setAndConfirm if
     // new beatloop_size is valid
 
-    double maxBeatLoopSize = s_dBeatSizes[sizeof(s_dBeatSizes) / sizeof(s_dBeatSizes[0]) - 1];
-    double minBeatLoopSize = s_dBeatSizes[0];
+    double maxBeatLoopSize = kBeatSizes.back();
+    double minBeatLoopSize = kBeatSizes.front();
     if ((beats < minBeatLoopSize) || (beats > maxBeatLoopSize)) {
         // Don't clamp the value here to not fall out of a measure
         return;
@@ -1773,8 +1783,8 @@ void LoopingControl::slotBeatJump(double beats) {
 
 void LoopingControl::slotBeatJumpSizeChangeRequest(double beats) {
     // Use same limits as for beat loop size
-    double maxBeatJumpSize = s_dBeatSizes[sizeof(s_dBeatSizes) / sizeof(s_dBeatSizes[0]) - 1];
-    double minBeatJumpSize = s_dBeatSizes[0];
+    double maxBeatJumpSize = kBeatSizes.back();
+    double minBeatJumpSize = kBeatSizes.front();
 
     if ((beats < minBeatJumpSize) || (beats > maxBeatJumpSize)) {
         // Don't clamp the value here to not fall out of a measure

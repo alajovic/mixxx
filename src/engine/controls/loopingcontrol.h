@@ -250,8 +250,6 @@ class LoopingControl : public EngineControl {
     // Base BeatLoop Control Object.
     std::unique_ptr<ControlObject> m_pCOBeatLoop;
     std::unique_ptr<ControlObject> m_pCOBeatLoopSize;
-    // Different sizes for Beat Loops/Seeks.
-    static double s_dBeatSizes[];
     // Array of BeatLoopingControls, one for each size.
     std::vector<std::unique_ptr<BeatLoopingControl>> m_beatLoops;
 
