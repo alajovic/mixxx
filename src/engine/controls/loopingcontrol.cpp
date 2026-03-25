@@ -133,7 +133,7 @@ mixxx::audio::FramePos adjustedPositionInsideAdjustedLoop(
         Loop const& oldLoop,
         Loop const& newLoop) {
     if (reverse) {
-        if (currentPosition <= newLoop.endPosition && currentPosition > newLoop.startPosition) {
+        if (newLoop.containsReverse(currentPosition)) {
             // playposition already is inside the loop
             return mixxx::audio::kInvalidFramePos;
         }
@@ -149,7 +149,7 @@ mixxx::audio::FramePos adjustedPositionInsideAdjustedLoop(
             return newLoop.endPosition;
         }
     } else {
-        if (currentPosition >= newLoop.startPosition && currentPosition < newLoop.endPosition) {
+        if (newLoop.containsForward(currentPosition)) {
             return mixxx::audio::kInvalidFramePos;
         }
         if (oldLoop.startPosition.isValid() &&
@@ -794,8 +794,7 @@ mixxx::audio::FramePos LoopingControl::getSyncPositionInsideLoop(
     // if the request itself is outside loop do nothing
     // loop will be disabled later by notifySeek(...) as is was explicitly requested by the user
     // if the requested position is the exact end of a loop it should also be disabled later by notifySeek(...)
-    if (requestedPlayPosition < loop.startPosition ||
-            requestedPlayPosition >= loop.endPosition) {
+    if (!loop.containsForward(requestedPlayPosition)) {
         return syncedPlayPosition;
     }
 
@@ -1338,8 +1337,8 @@ void LoopingControl::notifySeek(mixxx::audio::FramePos newPosition) {
         // Disable loop when we jumping out, or over a catching loop,
         // using hot cues or waveform overview.
         // Jumping to the exact end of a loop is considered jumping out.
-        if (currentPosition >= loop.startPosition &&
-                currentPosition <= loop.endPosition) {
+        if (loop.containsForward(currentPosition) ||
+                loop.containsReverse(currentPosition)) {
             if ((reverse && newPosition > loop.endPosition) ||
                     (!reverse && newPosition < loop.startPosition)) {
                 // jumping out of loop in "backwards"
@@ -1814,8 +1813,8 @@ void LoopingControl::slotBeatJump(double beats) {
     const auto currentPosition = m_currentPosition.getValue();
 
     if (m_bLoopingEnabled && m_loopAdjustTarget == LoopAdjustTarget::None &&
-            loop.startPosition <= currentPosition &&
-            loop.endPosition >= currentPosition) {
+            (loop.containsForward(currentPosition) ||
+                    loop.containsReverse(currentPosition))) {
         // If inside an active loop, move loop
         slotLoopMove(beats);
     } else {

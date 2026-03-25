@@ -51,6 +51,16 @@ struct Loop {
         return endPosition - startPosition;
     }
 
+    // Forward: [start, end) — playhead wraps at end back to start
+    bool containsForward(mixxx::audio::FramePos position) const {
+        return position >= startPosition && position < endPosition;
+    }
+
+    // Reverse: (start, end] — playhead wraps at start forward to end
+    bool containsReverse(mixxx::audio::FramePos position) const {
+        return position > startPosition && position <= endPosition;
+    }
+
     friend bool operator==(const Loop& lhs, const Loop& rhs) = default;
 };
 
