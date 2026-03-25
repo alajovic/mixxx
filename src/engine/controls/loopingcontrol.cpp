@@ -702,54 +702,48 @@ mixxx::BeatsPointer LoopingControl::getFake60BpmBeats() const {
 
 void LoopingControl::hintReader(gsl::not_null<HintVector*> pHintList) {
     const auto loop = m_loopInfo.getValue().loop;
-    Hint loop_hint;
-    // If the loop is enabled, then this is high priority because we will loop
-    // sometime potentially very soon! The current audio itself is priority 1,
-    // but we will issue ourselves at priority 2.
     if (m_bLoopingEnabled) {
-        // If we're looping, hint the loop in and loop out, in case we reverse
-        // into it. We could save information from process to tell which
-        // direction we're going in, but that this is much simpler, and hints
-        // aren't that bad to make anyway.
+        // High priority: we will loop potentially very soon.
         if (loop.startPosition.isValid()) {
-            loop_hint.type = Hint::Type::LoopStartEnabled;
-            loop_hint.frame = static_cast<SINT>(
-                    loop.startPosition.toLowerFrameBoundary().value());
-            loop_hint.frameCount = Hint::kFrameCountForward;
-            pHintList->append(loop_hint);
+            pHintList->append(Hint{
+                    .frame = static_cast<SINT>(
+                            loop.startPosition.toLowerFrameBoundary().value()),
+                    .frameCount = Hint::kFrameCountForward,
+                    .type = Hint::Type::LoopStartEnabled});
         }
         if (loop.endPosition.isValid()) {
-            loop_hint.type = Hint::Type::LoopEndEnabled;
-            loop_hint.frame = static_cast<SINT>(
-                    loop.endPosition.toUpperFrameBoundary().value());
-            loop_hint.frameCount = Hint::kFrameCountBackward;
-            pHintList->append(loop_hint);
+            pHintList->append(Hint{
+                    .frame = static_cast<SINT>(
+                            loop.endPosition.toUpperFrameBoundary().value()),
+                    .frameCount = Hint::kFrameCountBackward,
+                    .type = Hint::Type::LoopEndEnabled});
         }
     } else {
         if (loop.startPosition.isValid()) {
-            loop_hint.type = Hint::Type::LoopStart;
-            loop_hint.frame = static_cast<SINT>(
-                    loop.startPosition.toLowerFrameBoundary().value());
-            loop_hint.frameCount = Hint::kFrameCountForward;
-            pHintList->append(loop_hint);
+            pHintList->append(Hint{
+                    .frame = static_cast<SINT>(
+                            loop.startPosition.toLowerFrameBoundary().value()),
+                    .frameCount = Hint::kFrameCountForward,
+                    .type = Hint::Type::LoopStart});
         }
-        // We anticipate a potential loop being set from its end point
-        mixxx::BeatsPointer pBeats = m_pBeats;
+        // Anticipate a potential loop being set from the end point
+        const mixxx::BeatsPointer pBeats = m_pBeats;
         if (!pBeats) {
             return;
         }
-        double beats = m_pCOBeatLoopSize->get();
-        bool quantize = m_pQuantizeEnabled->toBool();
-        auto currentPosition = !quantize
+        const double beats = m_pCOBeatLoopSize->get();
+        const bool quantize = m_pQuantizeEnabled->toBool();
+        const auto currentPosition = !quantize
                 ? m_currentPosition.getValue()
                 : findQuantizedBeatloopStart(
                           pBeats, m_currentPosition.getValue(), beats);
-        loop_hint.type = Hint::Type::LoopStart;
-        loop_hint.frame = static_cast<SINT>(
-                pBeats->findNBeatsFromPosition(currentPosition, -beats)
-                        .toLowerFrameBoundary()
-                        .value());
-        loop_hint.frameCount = Hint::kFrameCountForward;
+        pHintList->append(Hint{
+                .frame = static_cast<SINT>(
+                        pBeats->findNBeatsFromPosition(currentPosition, -beats)
+                                .toLowerFrameBoundary()
+                                .value()),
+                .frameCount = Hint::kFrameCountForward,
+                .type = Hint::Type::LoopStart});
     }
 }
 
