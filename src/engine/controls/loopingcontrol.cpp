@@ -1182,8 +1182,7 @@ void LoopingControl::slotLoopEnabledValueChangeRequest(double value) {
             // Looping is currently disabled, try to enable the loop. In
             // contrast to the reloop_toggle CO, we jump in no case.
             const auto loop = m_loopInfo.getValue().loop;
-            if (loop.isValid() &&
-                    loop.startPosition <= loop.endPosition) {
+            if (loop.isValid() && loop.startPosition <= loop.endPosition) {
                 // setAndConfirm is called by setLoopingEnabled
                 setLoopingEnabled(true);
             }
@@ -1227,8 +1226,7 @@ void LoopingControl::slotReloopToggle(double val) {
         // If we're not looping, enable the loop. If the loop is ahead of the
         // current play position, do not jump to it.
         const auto loop = m_loopInfo.getValue().loop;
-        if (loop.isValid() &&
-                loop.startPosition <= loop.endPosition) {
+        if (loop.isValid() && loop.startPosition <= loop.endPosition) {
             setLoopingEnabled(true);
             if (m_currentPosition.getValue() > loop.endPosition) {
                 slotLoopInGoto(1);
