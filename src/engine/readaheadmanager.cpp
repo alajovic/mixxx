@@ -47,16 +47,14 @@ SINT ReadAheadManager::getNextSamples(double dRate,
     }
     bool in_reverse = dRate < 0;
 
-    mixxx::audio::FramePos targetPosition;
     // A loop (beat loop or track on repeat) will only limit the amount we
     // can read in one shot.
-    const mixxx::audio::FramePos loopTriggerPosition =
+    const auto [loopTriggerPosition, loopTargetPosition] =
             m_pLoopingControl->nextTrigger(in_reverse,
                     mixxx::audio::FramePos::fromSamplePosMaybeInvalid(
-                            m_currentPosition, channelCount),
-                    &targetPosition);
+                            m_currentPosition, channelCount));
     const double loop_trigger = loopTriggerPosition.toSamplePosMaybeInvalid(channelCount);
-    const double target = targetPosition.toSamplePosMaybeInvalid(channelCount);
+    const double target = loopTargetPosition.toSamplePosMaybeInvalid(channelCount);
 
     SINT preloop_samples = 0;
     double samplesToLoopTrigger = 0.0;
@@ -129,7 +127,7 @@ SINT ReadAheadManager::getNextSamples(double dRate,
     if (reachedTrigger) {
         DEBUG_ASSERT(target != kNoTrigger);
         if (m_pRateControl) {
-            m_pRateControl->notifyWrapAround(loopTriggerPosition, targetPosition);
+            m_pRateControl->notifyWrapAround(loopTriggerPosition, loopTargetPosition);
         }
         // TODO probably also useful for hotcue_X_indicator in CueControl::updateIndicators()
 

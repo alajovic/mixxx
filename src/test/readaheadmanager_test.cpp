@@ -51,16 +51,14 @@ class StubLoopControl : public LoopingControl {
                 mixxx::audio::FramePos::fromEngineSamplePosMaybeInvalid(value));
     }
 
-    mixxx::audio::FramePos nextTrigger(bool reverse,
-            mixxx::audio::FramePos currentPosition,
-            mixxx::audio::FramePos* pTargetPosition) override {
+    LoopTrigger nextTrigger(bool reverse,
+            mixxx::audio::FramePos currentPosition) override {
         Q_UNUSED(reverse);
         Q_UNUSED(currentPosition);
-        Q_UNUSED(pTargetPosition);
-        RELEASE_ASSERT(!m_targetReturnValues.isEmpty());
-        *pTargetPosition = m_targetReturnValues.takeFirst();
         RELEASE_ASSERT(!m_triggerReturnValues.isEmpty());
-        return m_triggerReturnValues.takeFirst();
+        RELEASE_ASSERT(!m_targetReturnValues.isEmpty());
+        return {m_triggerReturnValues.takeFirst(),
+                m_targetReturnValues.takeFirst()};
     }
 
   protected:

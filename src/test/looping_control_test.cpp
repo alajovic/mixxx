@@ -461,10 +461,9 @@ TEST_F(LoopingControlTest, LoopScale_HalvesLoop) {
     EXPECT_FRAMEPOS_EQ_CONTROL(mixxx::audio::FramePos{500}, m_pLoopEndPoint);
     // Since the current sample was out of range of the new loop,
     // the current sample should reseek based on the new loop size.
-    mixxx::audio::FramePos targetPosition;
-    const mixxx::audio::FramePos triggerPosition =
+    const auto [triggerPosition, targetPosition] =
             m_pChannel1->getEngineBuffer()->m_pLoopingControl->nextTrigger(
-                    false, mixxx::audio::FramePos{1800}, &targetPosition);
+                    false, mixxx::audio::FramePos{1800});
     EXPECT_FRAMEPOS_EQ(mixxx::audio::FramePos{300}, targetPosition);
     EXPECT_FRAMEPOS_EQ(mixxx::audio::FramePos{1800}, triggerPosition);
 }

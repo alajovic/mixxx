@@ -596,11 +596,8 @@ void LoopingControl::process(const double rate,
     }
 }
 
-mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
-        mixxx::audio::FramePos currentPosition,
-        mixxx::audio::FramePos* pTargetPosition) {
-    *pTargetPosition = mixxx::audio::kInvalidFramePos;
-
+LoopingControl::LoopTrigger LoopingControl::nextTrigger(bool reverse,
+        mixxx::audio::FramePos currentPosition) {
     LoopInfo loopInfo = m_loopInfo.getValue();
 
     if (m_loopAdjustTargetOld != m_loopAdjustTarget) {
@@ -613,13 +610,11 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
         if (!quantizeEnabledAndHasTrueTrackBeats()) {
             if (oldTarget == LoopAdjustTarget::LoopIn && reverse) {
                 m_oldLoop = loopInfo.loop;
-                *pTargetPosition = loopInfo.loop.endPosition;
-                return currentPosition;
+                return {currentPosition, loopInfo.loop.endPosition};
             }
             if (oldTarget == LoopAdjustTarget::LoopOut && !reverse) {
                 m_oldLoop = loopInfo.loop;
-                *pTargetPosition = loopInfo.loop.startPosition;
-                return currentPosition;
+                return {currentPosition, loopInfo.loop.startPosition};
             }
         }
     }
@@ -627,12 +622,10 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
     if (m_bLoopingEnabled && loopInfo.loop.isValid()) {
         if (m_loopAdjustTarget == LoopAdjustTarget::None) {
             if (loopInfo.loop != m_oldLoop) {
-                // bool seek is only valid after the loop has changed
+                mixxx::audio::FramePos targetPosition;
                 switch (loopInfo.seekMode) {
                 case LoopSeekMode::Changed:
-                    // here the loop has changed and the play position
-                    // should be moved with it
-                    *pTargetPosition = adjustedPositionInsideAdjustedLoop(currentPosition,
+                    targetPosition = adjustedPositionInsideAdjustedLoop(currentPosition,
                             reverse,
                             m_oldLoop,
                             loopInfo.loop);
@@ -643,9 +636,8 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                     const bool movedOutReverse =
                             reverse && loopInfo.loop.startPosition > currentPosition;
 
-                    // Check if we have moved out of the loop before we could enable it
                     if (movedOutForward || movedOutReverse) {
-                        *pTargetPosition = adjustedPositionInsideAdjustedLoop(currentPosition,
+                        targetPosition = adjustedPositionInsideAdjustedLoop(currentPosition,
                                 reverse,
                                 loopInfo.loop,
                                 loopInfo.loop);
@@ -653,23 +645,17 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
                     break;
                 }
                 case LoopSeekMode::None:
-                    // Nothing to do here. This is used for enabling saved loops
-                    // which we want to do without jumping to the loop start
-                    // position.
                     break;
                 }
                 m_oldLoop = loopInfo.loop;
-                if (pTargetPosition->isValid()) {
-                    // jump immediately
-                    return currentPosition;
+                if (targetPosition.isValid()) {
+                    return {currentPosition, targetPosition};
                 }
             }
             if (reverse) {
-                *pTargetPosition = loopInfo.loop.endPosition;
-                return loopInfo.loop.startPosition;
+                return {loopInfo.loop.startPosition, loopInfo.loop.endPosition};
             } else {
-                *pTargetPosition = loopInfo.loop.startPosition;
-                return loopInfo.loop.endPosition;
+                return {loopInfo.loop.endPosition, loopInfo.loop.startPosition};
             }
         } else {
             // LOOP in or out button is pressed for adjusting.
@@ -677,18 +663,13 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
             // prevents that the track stops outside the adjusted loop.
             if (!reverse) {
                 if (m_loopAdjustTarget == LoopAdjustTarget::LoopIn) {
-                    // Just in case the user does not release loop-in in time.
-                    *pTargetPosition = m_oldLoop.startPosition;
-                    return loopInfo.loop.endPosition;
+                    return {loopInfo.loop.endPosition, m_oldLoop.startPosition};
                 }
                 const FrameInfo info = frameInfo();
-                *pTargetPosition = loopInfo.loop.startPosition;
-                return info.trackEndPosition;
+                return {info.trackEndPosition, loopInfo.loop.startPosition};
             } else {
                 if (m_loopAdjustTarget == LoopAdjustTarget::LoopOut) {
-                    // Just in case the user does not release loop-out in time.
-                    *pTargetPosition = m_oldLoop.endPosition;
-                    return loopInfo.loop.startPosition;
+                    return {loopInfo.loop.startPosition, m_oldLoop.endPosition};
                 }
             }
         }
@@ -698,15 +679,13 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
     if (m_pRepeatButton->toBool()) {
         const FrameInfo info = frameInfo();
         if (reverse) {
-            *pTargetPosition = info.trackEndPosition;
-            return mixxx::audio::kStartFramePos;
+            return {mixxx::audio::kStartFramePos, info.trackEndPosition};
         } else {
-            *pTargetPosition = mixxx::audio::kStartFramePos;
-            return info.trackEndPosition;
+            return {info.trackEndPosition, mixxx::audio::kStartFramePos};
         }
     }
 
-    return mixxx::audio::kInvalidFramePos;
+    return {};
 }
 
 mixxx::audio::FramePos LoopingControl::getTrackFrame() const {

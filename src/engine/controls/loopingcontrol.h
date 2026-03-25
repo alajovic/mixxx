@@ -84,11 +84,16 @@ class LoopingControl : public EngineControl {
             mixxx::audio::FramePos currentPosition,
             const std::size_t bufferSize) override;
 
-    // nextTrigger returns the sample at which the engine will be triggered to
-    // take a loop, given the value of currentPosition and the playback direction.
-    virtual mixxx::audio::FramePos nextTrigger(bool reverse,
-            mixxx::audio::FramePos currentPosition,
-            mixxx::audio::FramePos* pTargetPosition);
+    struct LoopTrigger {
+        mixxx::audio::FramePos triggerPosition = mixxx::audio::kInvalidFramePos;
+        mixxx::audio::FramePos targetPosition = mixxx::audio::kInvalidFramePos;
+    };
+
+    // Returns the position at which the engine should trigger a loop jump
+    // (triggerPosition) and where to jump to (targetPosition), given the
+    // current playback position and direction.
+    virtual LoopTrigger nextTrigger(bool reverse,
+            mixxx::audio::FramePos currentPosition);
 
     // hintReader will add to hintList hints both the loop in and loop out
     // sample, if set.
