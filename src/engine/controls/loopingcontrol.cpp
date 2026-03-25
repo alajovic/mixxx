@@ -604,34 +604,27 @@ mixxx::audio::FramePos LoopingControl::nextTrigger(bool reverse,
     LoopInfo loopInfo = m_loopInfo.getValue();
 
     if (m_loopAdjustTargetOld != m_loopAdjustTarget) {
-        auto oldTarget = m_loopAdjustTargetOld;
-        m_loopAdjustTargetOld = m_loopAdjustTarget;
+        auto oldTarget = std::exchange(m_loopAdjustTargetOld, m_loopAdjustTarget);
 
-        // When the LoopIn button is released in reverse mode we jump to the end of the loop to not fall out and disable the active loop
-        // This must not happen in quantized mode. The newly set start is always ahead (in time, but behind spacially) of the current position so we don't jump.
-        // Jumping to the end is then handled when the loop's start is reached later in this function.
-        if (oldTarget == LoopAdjustTarget::LoopIn &&
-                m_loopAdjustTarget != LoopAdjustTarget::LoopIn &&
-                reverse && !quantizeEnabledAndHasTrueTrackBeats()) {
-            m_oldLoop = loopInfo.loop;
-            *pTargetPosition = loopInfo.loop.endPosition;
-            return currentPosition;
-        }
-
-        // When the LoopOut button is released in forward mode we jump to the start of the loop to not fall out and disable the active loop
-        // This must not happen in quantized mode. The newly set end is always ahead of the current position so we don't jump.
-        // Jumping to the start is then handled when the loop's end is reached later in this function.
-        if (oldTarget == LoopAdjustTarget::LoopOut &&
-                m_loopAdjustTarget != LoopAdjustTarget::LoopOut &&
-                !reverse && !quantizeEnabledAndHasTrueTrackBeats()) {
-            m_oldLoop = loopInfo.loop;
-            *pTargetPosition = loopInfo.loop.startPosition;
-            return currentPosition;
+        // When a loop point button is released, jump to the opposite end to
+        // avoid falling out and disabling the loop. Not needed in quantized
+        // mode: the newly set point is always ahead of the playhead, so the
+        // regular trigger logic below handles it.
+        if (!quantizeEnabledAndHasTrueTrackBeats()) {
+            if (oldTarget == LoopAdjustTarget::LoopIn && reverse) {
+                m_oldLoop = loopInfo.loop;
+                *pTargetPosition = loopInfo.loop.endPosition;
+                return currentPosition;
+            }
+            if (oldTarget == LoopAdjustTarget::LoopOut && !reverse) {
+                m_oldLoop = loopInfo.loop;
+                *pTargetPosition = loopInfo.loop.startPosition;
+                return currentPosition;
+            }
         }
     }
 
-    if (m_bLoopingEnabled &&
-            loopInfo.loop.isValid()) {
+    if (m_bLoopingEnabled && loopInfo.loop.isValid()) {
         if (m_loopAdjustTarget == LoopAdjustTarget::None) {
             if (loopInfo.loop != m_oldLoop) {
                 // bool seek is only valid after the loop has changed
