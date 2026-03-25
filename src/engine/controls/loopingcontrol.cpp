@@ -162,7 +162,7 @@ mixxx::audio::FramePos adjustedPositionInsideAdjustedLoop(
         }
     }
 
-    const mixxx::audio::FrameDiff_t newLoopSize = newLoop.endPosition - newLoop.startPosition;
+    const mixxx::audio::FrameDiff_t newLoopSize = newLoop.length();
     DEBUG_ASSERT(newLoopSize > 0);
     mixxx::audio::FramePos adjustedPosition = currentPosition;
     if (adjustedPosition > newLoop.endPosition) {
@@ -493,7 +493,7 @@ void LoopingControl::slotLoopScale(double scaleFactor) {
     }
 
     const mixxx::audio::FrameDiff_t loopLength =
-            (loopInfo.loop.endPosition - loopInfo.loop.startPosition) * scaleFactor;
+            loopInfo.loop.length() * scaleFactor;
     const FrameInfo info = frameInfo();
     const auto trackEndPosition = info.trackEndPosition;
     if (!trackEndPosition.isValid()) {
@@ -799,7 +799,6 @@ mixxx::audio::FramePos LoopingControl::getSyncPositionInsideLoop(
     }
 
     // the requested position is inside the loop (e.g hotcue at start)
-    const mixxx::audio::FrameDiff_t loopSizeFrames = loop.length();
 
     // the synced position is in front of the loop
     // adjust the synced position to same amount in front of the loop end
@@ -807,7 +806,7 @@ mixxx::audio::FramePos LoopingControl::getSyncPositionInsideLoop(
         mixxx::audio::FrameDiff_t adjustment = loop.startPosition - syncedPlayPosition;
 
         // prevents jumping in front of the loop if loop is smaller than adjustment
-        adjustment = fmod(adjustment, loopSizeFrames);
+        adjustment = fmod(adjustment, loop.length());
 
         // if the synced position is exactly the start of the loop we would end up at the exact end
         // as this would disable the loop in notifySeek() replace it with the start of the loop
@@ -823,7 +822,7 @@ mixxx::audio::FramePos LoopingControl::getSyncPositionInsideLoop(
         mixxx::audio::FrameDiff_t adjustment = syncedPlayPosition - loop.endPosition;
 
         // prevents jumping behind the loop if loop is smaller than adjustment
-        adjustment = fmod(adjustment, loopSizeFrames);
+        adjustment = fmod(adjustment, loop.length());
 
         return loop.startPosition + adjustment;
     }
